@@ -1,0 +1,8 @@
+{
+  "raw_records": 3,
+  "processed_records": 3,
+  "feature_rows": 3,
+  "processed_path": "D:\\Workplace\\Testing\\data\\processed\\summarization_corpus.jsonl",
+  "feature_store_path": "D:\\Workplace\\Testing\\data\\features\\feature_store.csv",
+  "generated_at": "2026-04-07T17:26:44.629893"
+}

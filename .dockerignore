@@ -1,0 +1,17 @@
+.git
+.github
+.vscode
+.idea
+.pytest_cache
+__pycache__
+**/__pycache__
+**/*.pyc
+.npm-cache
+node_modules
+**/node_modules
+apps/frontend/.next
+**/.next
+apps/frontend/.vercel
+dist
+build
+*.log

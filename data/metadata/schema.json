@@ -1,0 +1,33 @@
+{
+  "raw": {
+    "description": "Nguon du lieu thô cho bai toan tom tat van ban tieng Viet",
+    "accepted_formats": ["jsonl", "csv", "txt"],
+    "fields": ["id", "source", "text", "summary"]
+  },
+  "processed": {
+    "description": "Du lieu da lam sach, bo sung thong ke co ban va dung cho huan luyen / danh gia",
+    "fields": [
+      "id",
+      "source",
+      "text",
+      "summary",
+      "text_char_count",
+      "summary_char_count",
+      "text_word_count",
+      "summary_word_count",
+      "sentence_count",
+      "processed_at"
+    ]
+  },
+  "features": {
+    "description": "Feature store phuc vu training pipeline, monitoring va QA/QC",
+    "fields": [
+      "compression_ratio_target",
+      "avg_word_length"
+    ]
+  },
+  "warehouse": {
+    "description": "Bang log inference va view tong hop cho dashboard BI",
+    "tables": ["inference_logs", "bi_inference_metrics_daily"]
+  }
+}

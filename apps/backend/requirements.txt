@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+transformers==4.44.2
+torch
+sentence-transformers
+sentencepiece
+chromadb
+sqlalchemy
+psycopg2-binary
+pandas
+python-dotenv
+pytest
+python-multipart
