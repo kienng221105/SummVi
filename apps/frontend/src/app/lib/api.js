@@ -1,7 +1,5 @@
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
-const LEGACY_API_BASE_URL = (
-  process.env.NEXT_PUBLIC_LEGACY_API_BASE_URL || `${API_BASE_URL}/api/v1`
-).replace(/\/$/, "");
+const API_BASE_URL = "/api";
+const LEGACY_API_BASE_URL = "/api/v1";
 
 function buildHeaders(token, isJson = true) {
   const headers = {};
