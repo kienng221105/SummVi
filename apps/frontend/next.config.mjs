@@ -1,6 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  output: "standalone"
-};
+const nextConfig = process.env.DOCKER === "true" ? { output: "standalone" } : {};
 
 export default nextConfig;
