@@ -67,7 +67,7 @@ def safe_ratio(numerator: float, denominator: float) -> float:
     return float(numerator / denominator)
 
 
-def hashed_vector(tokens: Iterable[str], dimensions: int = 256) -> list[float]:
+def hashed_vector(tokens: Iterable[str], dimensions: int = 384) -> list[float]:
     vector = [0.0] * dimensions
     token_count = 0
 

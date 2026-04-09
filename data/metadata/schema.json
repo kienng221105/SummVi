@@ -1,8 +1,17 @@
 {
   "raw": {
-    "description": "Nguon du lieu thô cho bai toan tom tat van ban tieng Viet",
-    "accepted_formats": ["jsonl", "csv", "txt"],
-    "fields": ["id", "source", "text", "summary"]
+    "description": "Nguồn dữ liệu thô cho bài toán tóm tắt văn bản tiếng Việt",
+    "accepted_formats": [
+      "jsonl",
+      "csv",
+      "txt"
+    ],
+    "fields": [
+      "id",
+      "source",
+      "text",
+      "summary"
+    ]
   },
   "processed": {
     "description": "Du lieu da lam sach, bo sung thong ke co ban va dung cho huan luyen / danh gia",
@@ -28,6 +37,9 @@
   },
   "warehouse": {
     "description": "Bang log inference va view tong hop cho dashboard BI",
-    "tables": ["inference_logs", "bi_inference_metrics_daily"]
+    "tables": [
+      "inference_logs",
+      "bi_inference_metrics_daily"
+    ]
   }
 }

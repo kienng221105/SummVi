@@ -2,7 +2,8 @@ import os
 from pathlib import Path
 from typing import List
 
-from sentence_transformers import SentenceTransformer
+# Avoid top-level heavy imports to prevent MemoryError on startup
+# from sentence_transformers import SentenceTransformer
 
 from ml.utils.text_utils import clean_text, hashed_vector
 
@@ -19,7 +20,14 @@ class EmbeddingModel:
         self.model = None
         self.load_error: str | None = None
 
+        # Check for LITE_MODE to save memory
+        lite_mode = os.getenv("LITE_MODE", "false").lower() in {"1", "true", "yes", "on"}
+        if lite_mode:
+            self.load_error = "LITE_MODE enabled: skipping heavy model load"
+            return
+
         try:
+            from sentence_transformers import SentenceTransformer
             self.model = SentenceTransformer(
                 model_name,
                 cache_folder=str(self.cache_dir),
@@ -36,7 +44,7 @@ class EmbeddingModel:
         if self.model is not None:
             return self.model.encode(cleaned_texts, normalize_embeddings=True).tolist()
 
-        return [hashed_vector(text.split()) for text in cleaned_texts]
+        return [hashed_vector(text.split(), dimensions=384) for text in cleaned_texts]
 
     @property
     def embedding_backend(self) -> str:

@@ -45,12 +45,46 @@ def get_messages_for_user(db: Session, conversation_id: UUID, user_id: UUID):
     return get_messages(db, conversation_id)
 
 
-def summarize_text(db: Session, user_id: UUID, request: SummarizeRequest) -> SummarizeResponse:
-    conversation = create_conversation(
-        db,
-        user_id=user_id,
-        title=request.conversation_title or (request.text[:60] if request.text else "Tóm tắt văn bản"),
+def cleanup_old_conversations(db: Session, user_id: UUID, limit: int = 10):
+    """
+    Deletes the oldest conversations for a user if they exceed the limit.
+    """
+    conversations = (
+        db.query(Conversation)
+        .filter(Conversation.user_id == user_id)
+        .order_by(Conversation.created_at.desc())
+        .offset(limit)
+        .all()
     )
+
+    for conversation in conversations:
+        db.delete(conversation)
+    db.commit()
+
+
+def summarize_text(db: Session, user_id: UUID, request: SummarizeRequest) -> SummarizeResponse:
+    if request.conversation_id:
+        conversation = (
+            db.query(Conversation)
+            .filter(Conversation.id == request.conversation_id, Conversation.user_id == user_id)
+            .first()
+        )
+        if conversation is None:
+            # Fallback if invalid ID
+            conversation = create_conversation(
+                db,
+                user_id=user_id,
+                title=request.conversation_title or (request.text[:60] if request.text else "Tóm tắt văn bản"),
+            )
+    else:
+        conversation = create_conversation(
+            db,
+            user_id=user_id,
+            title=request.conversation_title or (request.text[:60] if request.text else "Tóm tắt văn bản"),
+        )
+        # Cleanup old ones only when creating a new one
+        cleanup_old_conversations(db, user_id, limit=10)
+
     create_message(db, conversation.id, request.text, is_user=True)
 
     result = build_summarization_service().summarize(

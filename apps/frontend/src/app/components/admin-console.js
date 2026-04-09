@@ -232,7 +232,7 @@ export default function AdminConsole() {
             <div className="logo-icon">SV</div>
             <h2>SummVi Admin</h2>
           </div>
-        <h1>Đang khởi tạo dashboard admin.</h1>
+          <h1>Đang khởi tạo dashboard admin.</h1>
           <p>Đang đồng bộ session và lấy analytics từ backend.</p>
         </section>
       </main>
@@ -361,7 +361,7 @@ export default function AdminConsole() {
                 <ChartCard
                   accent="b-orange"
                   points={charts.error_volume}
-                  subtitle="So request loi theo ngay"
+                  subtitle="Số request lỗi theo ngày"
                   title="Lưu lượng lỗi"
                 />
                 <ChartCard

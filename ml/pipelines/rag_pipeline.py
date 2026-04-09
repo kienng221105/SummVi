@@ -157,4 +157,11 @@ class RAGPipeline:
         }
         diagnostics.update(self.model.diagnostics())
         diagnostics.update(self.embedding_model.diagnostics())
+
+        # Cleanup temporary chunks to prevent storage bloat
+        try:
+            self.collection.delete(where={"request_id": request_id})
+        except Exception:
+            pass
+
         return diagnostics

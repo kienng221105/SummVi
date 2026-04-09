@@ -11,6 +11,7 @@ class SummarizeRequest(BaseModel):
     summary_length: str = Field(default="medium", pattern="^(short|medium|long)$")
     output_format: str = Field(default="paragraph", pattern="^(paragraph|bullet|keypoints)$")
     conversation_title: str | None = None
+    conversation_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_payload(self):

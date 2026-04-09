@@ -1,8 +1,9 @@
 import os
 from pathlib import Path
 
-import torch
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+# Avoid top-level heavy imports to prevent MemoryError on startup
+# import torch
+# from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 from ml.utils.summarization_prompts import (
     build_summary_prompt,
@@ -24,12 +25,22 @@ class ViT5Model:
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cpu"
         self.tokenizer = None
         self.model = None
         self.load_error: str | None = None
 
+        # Check for LITE_MODE to save memory
+        lite_mode = os.getenv("LITE_MODE", "false").lower() in {"1", "true", "yes", "on"}
+        if lite_mode:
+            self.load_error = "LITE_MODE enabled: skipping heavy model load"
+            return
+
         try:
+            import torch
+            from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
             self.tokenizer = AutoTokenizer.from_pretrained(
                 selected_model,
                 use_fast=False,
@@ -62,7 +73,7 @@ class ViT5Model:
         normalized_length = normalize_summary_length(summary_length)
         normalized_format = normalize_output_format(output_format)
 
-        if self.model is None or self.tokenizer is None:
+        if self.model is None or self.tokenizer is None or self.device != "cuda":
             fallback_summary = lead_sentences_summary(
                 processed_text,
                 max_sentences=5 if normalized_length == "long" else 3 if normalized_length == "short" else 4,
@@ -108,15 +119,20 @@ class ViT5Model:
 
     @property
     def generation_backend(self) -> str:
-        return "vit5" if self.model is not None and self.tokenizer is not None else "lead_sentences_fallback"
+        if self.model is not None and self.tokenizer is not None and self.device == "cuda":
+            return "vit5"
+        return "lead_sentences_fallback"
 
     def diagnostics(self) -> dict:
         gpu_memory_mb = None
-        if torch.cuda.is_available():
-            try:
+        cuda_available = False
+        try:
+            import torch
+            cuda_available = torch.cuda.is_available()
+            if cuda_available:
                 gpu_memory_mb = round(torch.cuda.memory_allocated() / (1024 * 1024), 4)
-            except Exception:
-                gpu_memory_mb = None
+        except Exception:
+            pass
 
         return {
             "model_name": self.model_name,
@@ -124,6 +140,6 @@ class ViT5Model:
             "generation_backend": self.generation_backend,
             "used_model_fallback": self.generation_backend != "vit5",
             "model_load_error": self.load_error,
-            "cuda_available": torch.cuda.is_available(),
+            "cuda_available": cuda_available,
             "gpu_memory_mb": gpu_memory_mb,
         }

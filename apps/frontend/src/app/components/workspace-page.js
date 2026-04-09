@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,6 +11,7 @@ import {
   listConversations,
   summarizeLegacy,
   summarizeText,
+  uploadDocument,
   upsertRating,
 } from "../lib/api";
 import { clearStoredSession } from "../lib/session";
@@ -63,9 +64,9 @@ export default function WorkspacePage() {
   const router = useRouter();
   const { session, setSession, booting } = useSessionGuard({ mode: "protected" });
   const hydrateRequestIdRef = useRef(0);
+  const [activeView, setActiveView] = useState("composer"); // composer | history
   const [activeTab, setActiveTab] = useState("text");
-  const [text, setText] = useState(QUICK_START_TEXT);
-  const [urlText, setUrlText] = useState("");
+  const [text, setText] = useState("");
   const [conversationTitle, setConversationTitle] = useState("");
   const [summaryLength, setSummaryLength] = useState("medium");
   const [outputFormat, setOutputFormat] = useState("bullet");
@@ -79,7 +80,11 @@ export default function WorkspacePage() {
   const [conversationLoading, setConversationLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [savingRating, setSavingRating] = useState(false);
+  const [hasSummarizedOnce, setHasSummarizedOnce] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
 
@@ -107,6 +112,27 @@ export default function WorkspacePage() {
   }, [selectedConversationId, session]);
 
   useEffect(() => {
+    const savedFormat = localStorage.getItem("summvi_output_format");
+    const savedLength = localStorage.getItem("summvi_summary_length");
+    if (savedFormat) setOutputFormat(savedFormat);
+    if (savedLength) setSummaryLength(savedLength);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("summvi_output_format", outputFormat);
+    if (!booting && text.trim() && hasSummarizedOnce) {
+      handleSummarize();
+    }
+  }, [outputFormat]);
+
+  useEffect(() => {
+    localStorage.setItem("summvi_summary_length", summaryLength);
+    if (!booting && text.trim() && hasSummarizedOnce) {
+      handleSummarize();
+    }
+  }, [summaryLength]);
+
+  useEffect(() => {
     if (!toast) {
       return undefined;
     }
@@ -114,10 +140,146 @@ export default function WorkspacePage() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  function renderFormattedContent(content, limit = 0) {
+    if (!content) return null;
+    if (outputFormat === "paragraph") {
+      const sanitized = (content || "").replace(/^[\s-•*]+/gm, "").trim();
+      return <p className="summary-paragraph">{sanitized}</p>;
+    }
+    let bullets = splitSummary(content);
+    if (limit > 0) {
+      bullets = bullets.slice(0, limit);
+    }
+    return (
+      <ul className="summary-bullets">
+        {bullets.map((item, index) => (
+          <li key={index}>{item}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  function renderHistoryView() {
+    return (
+      <div className="history-view-container">
+        <div className="view-header">
+          <h2>Lịch sử tóm tắt</h2>
+          <p>Xem lại các bản tóm tắt đã thực hiện trong quá khứ.</p>
+        </div>
+
+        {loadingHistory ? (
+          <div className="loading-state">Đang tải lịch sử...</div>
+        ) : conversations.length === 0 ? (
+          <div className="empty-state">
+            <p>Chưa có cuộc hội thoại nào.</p>
+            <button className="primary-btn" onClick={() => setActiveView("composer")}>
+              Thực hiện bản tóm tắt đầu tiên
+            </button>
+          </div>
+        ) : (
+          <div className="history-grid">
+            {conversations.map((conversation) => (
+              <div
+                key={conversation.id}
+                className="conversation-card"
+                onClick={() => {
+                  setSelectedConversationId(conversation.id);
+                  setActiveView("detail");
+                }}
+              >
+                <div className="card-header">
+                  <h4 className="card-title">{conversation.title || "Tóm tắt văn bản"}</h4>
+                  <span className="card-date">{formatDate(conversation.created_at)}</span>
+                </div>
+                <p className="card-preview">
+                  Bấm để xem chi tiết nội dung và các thông số phân tích.
+                </p>
+                <div className="card-footer">
+                  <span className="metric-badge">ID: {conversation.id.slice(0, 8)}</span>
+                  <button
+                    className="card-delete-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteConversation(conversation.id);
+                    }}
+                  >
+                    Xóa
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderDetailView() {
+    const exchangePairs = [];
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].is_user) {
+        const assistantMsg = messages.find(
+          (m, idx) => idx > i && !m.is_user && m.conversation_id === messages[i].conversation_id
+        );
+        exchangePairs.push({
+          user: messages[i],
+          assistant: assistantMsg,
+        });
+      }
+    }
+
+    return (
+      <div className="history-view-container">
+        <div className="detail-view-header">
+          <button className="back-btn" onClick={() => setActiveView("history")}>
+            ← Quay lại
+          </button>
+          <h2>{selectedConversation?.title || "Chi tiết tóm tắt"}</h2>
+        </div>
+
+        {conversationLoading ? (
+          <div className="loading-state">Đang tải chi tiết...</div>
+        ) : (
+          <div className="exchange-list">
+            {exchangePairs.length === 0 && <p>Không tìm thấy nội dung trao đổi.</p>}
+            {exchangePairs.map((pair, index) => (
+              <div key={index} className="exchange-box">
+                <div className="exchange-prompt">
+                  <label>Nội dung gốc</label>
+                  <p>{pair.user.content}</p>
+                </div>
+                <div className="exchange-result">
+                  <label>Bản tóm tắt ViT5</label>
+                  {pair.assistant ? (
+                    <>
+                      {renderFormattedContent(pair.assistant.content)}
+                      <div className="exchange-metrics">
+                        <div className="mini-chip">
+                          Số chữ: <strong>{countWords(pair.assistant.content)}</strong>
+                        </div>
+                        <div className="mini-chip">
+                          Thời gian: <strong>{formatDate(pair.assistant.created_at)}</strong>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-muted italic">Đang chờ phản hồi hoặc không có dữ liệu...</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const selectedConversation = useMemo(
     () => conversations.find((item) => item.id === selectedConversationId) || null,
     [conversations, selectedConversationId],
   );
+
+  const composerWordCount = useMemo(() => countWords(text), [text]);
 
   const summaryBullets = useMemo(
     () => splitSummary(latestResult?.summary || latestResult?.content || ""),
@@ -149,6 +311,7 @@ export default function WorkspacePage() {
     setFeedback("");
     setRatingValue(4);
     setConversationLoading(false);
+    setHasSummarizedOnce(false);
   }
 
   async function loadConversations(token, preferredConversationId = "") {
@@ -185,6 +348,7 @@ export default function WorkspacePage() {
 
       const assistantMessage = [...messageRows].reverse().find((item) => !item.is_user);
       if (assistantMessage) {
+        setHasSummarizedOnce(true);
         setLatestResult((current) => ({
           ...current,
           summary: assistantMessage.content,
@@ -195,7 +359,7 @@ export default function WorkspacePage() {
         }));
       }
     } catch (requestError) {
-      setError(requestError.message || "KhÃ´ng thá»ƒ táº£i ná»™i dung há»™i thoáº¡i.");
+      setError(requestError.message || "Không thể tải nội dung hội thoại.");
     } finally {
       if (requestId === hydrateRequestIdRef.current) {
         setConversationLoading(false);
@@ -203,14 +367,42 @@ export default function WorkspacePage() {
     }
   }
 
-  async function handleSummarize() {
-    const inputText = activeTab === "text" ? text : urlText;
-    if (!inputText.trim()) {
-      setError("Cần nhập nội dung văn bản hoặc đường dẫn.");
+  async function handleFileUpload(file) {
+    if (!session?.token) {
+      setError("Cần đăng nhập để sử dụng tính năng tải tài liệu.");
+      return;
+    }
+    const validTypes = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
+    if (!validTypes.includes(file.type) && !file.name.endsWith(".txt")) {
+      setError("Định dạng file không hợp lệ. Vui lòng chọn .pdf, .docx hoặc .txt");
       return;
     }
 
-    resetConversationView();
+    setError("");
+    setIsExtracting(true);
+    setIsDragging(false);
+    try {
+      const result = await uploadDocument(session.token, file);
+      setText(result.content);
+      setActiveTab("text");
+      setToast(`Đã trích xuất ${result.word_count} từ từ file ${result.filename}`);
+    } catch (requestError) {
+      setError(requestError.message || "Không thể trích xuất văn bản từ file.");
+    } finally {
+      setIsExtracting(false);
+    }
+  }
+
+  async function handleSummarize() {
+    const inputText = text;
+    if (!inputText.trim()) {
+      setError("Cần nhập hoặc tải lên nội dung văn bản để tóm tắt.");
+      return;
+    }
+
+    if (!selectedConversationId) {
+      resetConversationView();
+    }
     setSubmitting(true);
     setError("");
 
@@ -220,6 +412,7 @@ export default function WorkspacePage() {
         summary_length: summaryLength,
         output_format: outputFormat,
         conversation_title: conversationTitle || undefined,
+        conversation_id: selectedConversationId || undefined,
       };
 
       let response;
@@ -243,6 +436,7 @@ export default function WorkspacePage() {
 
       setToast("Đã tạo bản tóm tắt mới.");
       setLatestResult(response);
+      setHasSummarizedOnce(true);
     } catch (requestError) {
       setError(requestError.message || "Không thể tạo bản tóm tắt.");
     } finally {
@@ -250,23 +444,24 @@ export default function WorkspacePage() {
     }
   }
 
-  async function handleDeleteConversation() {
-    if (!session?.token || !selectedConversationId) {
+  async function handleDeleteConversation(convId = selectedConversationId) {
+    if (!session?.token || !convId) {
       return;
     }
 
     try {
-      await deleteConversation(session.token, selectedConversationId);
-      const remainingItems = conversations.filter((item) => item.id !== selectedConversationId);
+      await deleteConversation(session.token, convId);
+      const remainingItems = conversations.filter((item) => item.id !== convId);
       setConversations(remainingItems);
-      const nextConversationId = remainingItems[0]?.id || "";
-      setSelectedConversationId(nextConversationId);
-      setToast("Đã xóa hội thoại.");
-      if (!nextConversationId) {
+
+      if (convId === selectedConversationId) {
+        setSelectedConversationId("");
         setMessages([]);
         setCurrentRating(null);
         setLatestResult(null);
+        if (activeView === "detail") setActiveView("history");
       }
+      setToast("Đã xóa hội thoại.");
     } catch (requestError) {
       setError(requestError.message || "Không thể xóa hội thoại.");
     }
@@ -318,7 +513,6 @@ export default function WorkspacePage() {
   function handleResetComposer() {
     resetConversationView();
     setText("");
-    setUrlText("");
     setConversationTitle("");
     setError("");
   }
@@ -360,35 +554,43 @@ export default function WorkspacePage() {
 
   return (
     <>
-      <div className="app-container">
+      <div className={`app-container ${isSidebarOpen ? "sidebar-open" : ""}`}>
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setIsSidebarOpen(false)}
+        />
         <aside className="sidebar">
           <div className="logo-area">
             <div className="logo-icon">SV</div>
             <h2>SummVi</h2>
           </div>
 
-          <button className="new-chat-btn" onClick={handleResetComposer} type="button">
+          <button
+            className={`new-chat-btn ${activeView === "composer" ? "active" : ""}`}
+            onClick={() => {
+              handleResetComposer();
+              setActiveView("composer");
+            }}
+            type="button"
+          >
             + Tạo tóm tắt mới
           </button>
 
-          <div className="nav-section">
-            <p className="section-title">Gần đây</p>
+          <div className="settings-nav">
+            <p className="section-title">Điều hướng</p>
             <ul className="history-list">
-              {loadingHistory ? <li className="history-item">Đang tải hội thoại...</li> : null}
-              {!loadingHistory && conversations.length === 0 ? (
-                <li className="history-item">Chưa có hội thoại nào.</li>
-              ) : null}
-              {conversations.map((conversation) => (
-                <li
-                  key={conversation.id}
-                  className={`history-item ${
-                    selectedConversationId === conversation.id ? "active" : ""
-                  }`}
-                  onClick={() => setSelectedConversationId(conversation.id)}
-                >
-                  <span>{conversation.title || "Tóm tắt văn bản"}</span>
-                </li>
-              ))}
+              <li
+                className={`history-item ${activeView === "composer" ? "active" : ""}`}
+                onClick={() => setActiveView("composer")}
+              >
+                <span>Dòng thời gian ảo</span>
+              </li>
+              <li
+                className={`history-item ${activeView === "history" ? "active" : ""}`}
+                onClick={() => setActiveView("history")}
+              >
+                <span>Lịch sử tóm tắt</span>
+              </li>
             </ul>
           </div>
 
@@ -396,6 +598,13 @@ export default function WorkspacePage() {
 
         <main className="main-content">
           <header className="topbar">
+            <button
+              className="hamburger-btn"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              type="button"
+            >
+              ☰
+            </button>
             <div className="breadcrumb">
               <span>{selectedConversation?.title || "Tóm tắt mới"}</span>
             </div>
@@ -424,323 +633,357 @@ export default function WorkspacePage() {
           </header>
 
           <div className="workspace">
-            <div className="workspace-header">
-              <h1>
-                Sức mạnh AI, <span className="text-gradient">tóm gọn</span> mọi văn bản.
-              </h1>
-              <p>
-                Nhập văn bản, đường dẫn hoặc mở panel tài liệu để thao tác theo giao diện mẫu. Sử
-                dụng thực tế hiện tại đang nối đến FastAPI summarization workflow.
-              </p>
-            </div>
-
-            <div className="summary-preview-card">
-              <div className="result-header">
-                <h3>Kết quả tóm tắt</h3>
-                <button
-                  className="copy-btn"
-                  onClick={() => document.getElementById("resultArea")?.scrollIntoView({ behavior: "smooth" })}
-                  type="button"
-                >
-                  Xem chi tiết
-                </button>
-              </div>
-
-              {hasResultPanel ? (
-                submitting || conversationLoading ? (
-                  <div className="loading-state compact-loading" id="loadingState">
-                    <div className="spinner-container">
-                      <div className="spinner" />
-                    </div>
-                    <p>{submitting ? "AI đang xử lý bản tóm tắt..." : "Đang tải nội dung hội thoại..."}</p>
-                  </div>
-                ) : (
-                  <div className="final-output compact-output" id="finalOutputPreview">
-                    {summaryBullets.length > 0 ? (
-                      <ul className="summary-bullets">
-                        {summaryBullets.slice(0, 5).map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="empty-output">Chưa có kết quả tóm tắt.</p>
-                    )}
-
-                    <div className="metrics-strip compact-metrics">
-                      <div className="metric-chip">
-                        <span>Tỷ lệ nén</span>
-                        <strong>{compressionRatio.toFixed(3)}</strong>
-                      </div>
-                      <div className="metric-chip">
-                        <span>Số chữ summary</span>
-                        <strong>{summaryWordCount}</strong>
-                      </div>
-                    </div>
-                  </div>
-                )
-              ) : (
-                <div className="result-empty-state">
-                  <h4>Kết quả sẽ hiện ở đây</h4>
-                  <p>Nhấn “Tạo tóm tắt” để xem summary và chỉ số ngay trên đầu trang.</p>
-                </div>
-              )}
-            </div>
-
-            <div className="editor-card">
-              <div className="editor-tabs">
-                <button
-                  className={`tab-btn ${activeTab === "text" ? "active" : ""}`}
-                  onClick={() => setActiveTab("text")}
-                  type="button"
-                >
-                  Văn bản
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === "file" ? "active" : ""}`}
-                  onClick={() => setActiveTab("file")}
-                  type="button"
-                >
-                  Tải tài liệu
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === "url" ? "active" : ""}`}
-                  onClick={() => setActiveTab("url")}
-                  type="button"
-                >
-                  Đường dẫn URL
-                </button>
-              </div>
-
-              <div className="editor-body">
-                {activeTab === "text" ? (
-                  <div className="input-panel active">
-                    <input
-                      className="title-input"
-                      onChange={(event) => setConversationTitle(event.target.value)}
-                      placeholder="Tiêu đề hội thoại (tùy chọn)"
-                      type="text"
-                      value={conversationTitle}
-                    />
-                    <textarea
-                      onChange={(event) => setText(event.target.value)}
-                      placeholder="Dán văn bản tiếng Việt dài của bạn vào đây..."
-                      value={text}
-                    />
-                    <div className="textarea-footer">
-                      <span className="word-count">{text.trim().split(/\s+/).filter(Boolean).length} từ</span>
-                      <button className="clear-btn" onClick={() => setText("")} type="button">
-                        Xóa tất cả
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {activeTab === "file" ? (
-                  <div className="input-panel active">
-                    <div className="dropzone">
-                      <div className="drop-icon">PDF</div>
-                      <p className="drop-title">Panel tải file được giữ theo giao diện mẫu.</p>
-                      <p className="drop-desc">
-                        Hiện backend chưa mở endpoint upload tài liệu trên frontend này, nên tab này
-                        chỉ để giữ UX giống project zip.
-                      </p>
-                    </div>
-                  </div>
-                ) : null}
-
-                {activeTab === "url" ? (
-                  <div className="input-panel active">
-                    <div className="url-wrapper">
-                      <span>URL</span>
-                      <input
-                        onChange={(event) => setUrlText(event.target.value)}
-                        placeholder="Dán URL và hệ thống sẽ tóm tắt nội dung mô tả"
-                        type="text"
-                        value={urlText}
-                      />
-                    </div>
-                    <p className="panel-note">
-                      Frontend sẽ gửi nguyên chuỗi này vào endpoint summarize hiện tại.
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="action-bar">
-              <div className="settings-group">
-                <div className="setting-item">
-                  <label>Độ dài tóm tắt</label>
-                  <div className="segmented-control">
-                    {LENGTH_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        className={`segment ${summaryLength === option.value ? "active" : ""}`}
-                        onClick={() => setSummaryLength(option.value)}
-                        type="button"
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
+            {activeView === "composer" ? (
+              <>
+                <div className="workspace-header">
+                  <h1>
+                    Sức mạnh AI, <span className="text-gradient">tóm gọn</span> mọi văn bản.
+                  </h1>
+                  <p>
+                    Nhập văn bản, đường dẫn hoặc mở panel tài liệu để thao tác theo giao diện mẫu. Sử
+                    dụng thực tế hiện tại đang nối đến FastAPI summarization workflow.
+                  </p>
                 </div>
 
-                <div className="setting-item">
-                  <label>Kiểu trình bày</label>
-                  <div className="select-box">
-                    <select
-                      onChange={(event) => setOutputFormat(event.target.value)}
-                      value={outputFormat}
+                <div className="summary-preview-card">
+                  <div className="result-header">
+                    <h3>Kết quả tóm tắt</h3>
+                    <button
+                      className="copy-btn"
+                      onClick={() =>
+                        document.getElementById("resultArea")?.scrollIntoView({ behavior: "smooth" })
+                      }
+                      type="button"
                     >
-                      <option value="bullet">Gạch đầu dòng</option>
-                      <option value="paragraph">Đoạn văn tự nhiên</option>
-                      <option value="keypoints">Ý chính</option>
-                    </select>
+                      Xem chi tiết
+                    </button>
+                  </div>
+
+                  {hasResultPanel ? (
+                    submitting || conversationLoading ? (
+                      <div className="loading-state compact-loading" id="loadingState">
+                        <div className="spinner-container">
+                          <div className="spinner" />
+                        </div>
+                        <p>
+                          {submitting
+                            ? "AI đang xử lý bản tóm tắt..."
+                            : "Đang tải nội dung hội thoại..."}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="final-output compact-output" id="finalOutputPreview">
+                        {renderFormattedContent(
+                          latestResult?.summary ||
+                          latestResult?.content ||
+                          [...messages].reverse().find((m) => !m.is_user)?.content,
+                          5
+                        )}
+
+                        <div className="metrics-strip compact-metrics">
+                          <div className="metric-chip">
+                            <span>Tỷ lệ chiều dài</span>
+                            <strong>{lengthRatio.toFixed(3)}</strong>
+                          </div>
+                          <div className="metric-chip">
+                            <span>Tỷ lệ nén</span>
+                            <strong>{compressionRatio.toFixed(3)}</strong>
+                          </div>
+                          <div className="metric-chip">
+                            <span>Số chữ summary</span>
+                            <strong>{summaryWordCount}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    <div className="empty-preview">
+                      <p>Nhập văn bản bên dưới để bắt đầu tóm tắt bằng AI.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="composer-card">
+                  <div className="tabs">
+                    <button
+                      className={`tab-btn ${activeTab === "text" ? "active" : ""}`}
+                      onClick={() => setActiveTab("text")}
+                      type="button"
+                    >
+                      Văn bản
+                    </button>
+                    <button
+                      className={`tab-btn ${activeTab === "file" ? "active" : ""}`}
+                      onClick={() => setActiveTab("file")}
+                      type="button"
+                    >
+                      Tải tài liệu
+                    </button>
+                  </div>
+
+                  <div className="tab-content">
+                    {activeTab === "text" ? (
+                      <div className="input-panel active">
+                        <input
+                          className="title-input"
+                          onChange={(event) => setConversationTitle(event.target.value)}
+                          placeholder="Tiêu đề hội thoại (tùy chọn)"
+                          type="text"
+                          value={conversationTitle}
+                        />
+                        <textarea
+                          className="main-textarea"
+                          onChange={(event) => setText(event.target.value)}
+                          placeholder={QUICK_START_TEXT}
+                          value={text}
+                        />
+                        <div className="textarea-footer">
+                          <span className={composerWordCount > 5000 ? "text-error" : ""}>
+                            {composerWordCount} / 5000 từ
+                          </span>
+                          <button className="clear-btn" onClick={() => setText("")} type="button">
+                            Xóa tất cả
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {activeTab === "file" ? (
+                      <div className="input-panel active">
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.txt"
+                          style={{ display: "none" }}
+                          id="file-upload-input"
+                          onChange={(e) => {
+                            if (e.target.files?.[0]) {
+                              handleFileUpload(e.target.files[0]);
+                            }
+                          }}
+                        />
+                        <div
+                          className={`upload-zone ${isExtracting ? "loading" : ""} ${isDragging ? "dragging" : ""}`}
+                          onClick={() => document.getElementById("file-upload-input")?.click()}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDragging(true);
+                          }}
+                          onDragLeave={() => setIsDragging(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDragging(false);
+                            if (e.dataTransfer.files?.[0]) {
+                              handleFileUpload(e.dataTransfer.files[0]);
+                            }
+                          }}
+                        >
+                          <div className="upload-icon-wrapper">
+                            <svg className="upload-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M7 10L12 5L17 10M12 5V19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </div>
+                          <p className="upload-main-text">
+                            {isExtracting ? "Đang trích xuất văn bản..." : "Kéo thả file vào đây hoặc click để chọn file"}
+                          </p>
+                          <span className="upload-sub-text">Hỗ trợ .pdf, .docx, .txt (tối đa 20MB)</span>
+                          {isExtracting && <div className="loading-bar-container"><div className="loading-bar-fill"></div></div>}
+                        </div>
+                        <div className="placeholder-info">
+                          <p>
+                            Sau khi tải lên, nội dung sẽ được trích xuất vào tab "Văn bản" để bạn có thể xem lại và chỉnh sửa.
+                          </p>
+                          <p className="panel-note">
+                            Giới hạn trích xuất tối đa 5000 từ để đảm bảo chất lượng tóm tắt tốt nhất.
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
-              </div>
 
-              <button
-                className="summarize-btn"
-                disabled={submitting}
-                id="generateBtn"
-                onClick={handleSummarize}
-                type="button"
-              >
-                <span className="btn-text">{submitting ? "Đang xử lý..." : "Tạo tóm tắt"}</span>
-                <span>{submitting ? "..." : ">"}</span>
-              </button>
-            </div>
-
-            {error ? <p className="inline-error">{error}</p> : null}
-
-            {(submitting || conversationLoading || latestResult || messages.length > 0) && (
-              <div className="result-area" id="resultArea">
-                <div className="result-header">
-                  <h3>Kết quả tóm tắt</h3>
-                  <div className="result-actions">
-                    <div className="star-rating" title="Đánh giá chất lượng">
-                      {STAR_VALUES.map((value) => (
-                        <button
-                          key={value}
-                          className={`star-icon ${ratingValue >= value ? "filled" : ""}`}
-                          disabled={!selectedConversationId || savingRating}
-                          onClick={() => handleStarClick(value)}
-                          type="button"
-                        >
-                          *
-                        </button>
-                      ))}
+                <div className="action-bar">
+                  <div className="settings-group">
+                    <div className="setting-item">
+                      <label>Độ dài tóm tắt</label>
+                      <div className="segmented-control">
+                        {LENGTH_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            className={`segment ${summaryLength === option.value ? "active" : ""}`}
+                            onClick={() => setSummaryLength(option.value)}
+                            type="button"
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <button className="icon-btn copy-btn" onClick={handleCopySummary} type="button">
-                      Sao chép
+
+                    <div className="setting-item">
+                      <label>Kiểu trình bày</label>
+                      <div className="select-box">
+                        <select
+                          onChange={(event) => setOutputFormat(event.target.value)}
+                          value={outputFormat}
+                        >
+                          <option value="bullet">Gạch đầu dòng</option>
+                          <option value="paragraph">Đoạn văn tự nhiên</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="main-actions">
+                    {error ? <span className="error-message">{error}</span> : null}
+                    <button
+                      className="primary-btn pulse"
+                      disabled={submitting}
+                      onClick={handleSummarize}
+                      type="button"
+                    >
+                      {submitting ? "Đang xử lý..." : "Tạo tóm tắt"}
                     </button>
                   </div>
                 </div>
 
-                {submitting || conversationLoading ? (
-                  <div className="loading-state" id="loadingState">
-                    <div className="spinner-container">
-                      <div className="spinner" />
-                    </div>
-                    <p>{submitting ? "AI đang phân tích và trích xuất ý chính..." : "Đang tải nội dung hội thoại..."}</p>
-                    <div className="skeleton-lines">
-                      <div className="skeleton line" />
-                      <div className="skeleton line x-long" />
-                      <div className="skeleton line long" />
-                      <div className="skeleton line medium" />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="final-output" id="finalOutput">
-                    {summaryBullets.length > 0 ? (
-                      <ul className="summary-bullets">
-                        {summaryBullets.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="empty-output">Chưa có kết quả tóm tắt.</p>
-                    )}
-
-                    <div className="metrics-strip">
-                      <div className="metric-chip">
-                        <span>Tỷ lệ chiều dài</span>
-                        <strong>{lengthRatio.toFixed(3)}</strong>
-                      </div>
-                      <div className="metric-chip">
-                        <span>Tỷ lệ nén</span>
-                        <strong>{compressionRatio.toFixed(3)}</strong>
-                      </div>
-                      <div className="metric-chip">
-                        <span>Số chữ summary</span>
-                        <strong>{summaryWordCount}</strong>
-                      </div>
-                      <div className="metric-chip">
-                        <span>Số chữ đầu vào</span>
-                        <strong>{inputWordCount}</strong>
-                      </div>
-                      <div className="metric-chip">
-                        <span>Thời gian tạo</span>
-                        <strong>{formatDate(latestResult?.created_at)}</strong>
-                      </div>
-                    </div>
-
-                    <div className="result-subgrid">
-                      <div className="transcript-card">
-                        <div className="mini-header">
-                          <h4>Transcript hội thoại</h4>
-                          {selectedConversationId ? (
-                            <button className="clear-btn" onClick={handleDeleteConversation} type="button">
-                              Xóa hội thoại
-                            </button>
-                          ) : null}
-                        </div>
-                        <div className="message-list">
-                          {messages.length === 0 ? <p>Chưa có tin nhắn nào.</p> : null}
-                          {messages.map((message) => (
-                            <div
-                              key={message.id}
-                              className={`message-bubble ${message.is_user ? "user" : "assistant"}`}
+                {(submitting || conversationLoading || latestResult || messages.length > 0) && (
+                  <div className="result-area" id="resultArea">
+                    <div className="result-header">
+                      <h3>Kết quả tóm tắt</h3>
+                      <div className="result-actions">
+                        <div className="star-rating">
+                          {STAR_VALUES.map((val) => (
+                            <button
+                              key={val}
+                              className={`star ${ratingValue >= val ? "active" : ""}`}
+                              onClick={() => handleStarClick(val)}
+                              type="button"
                             >
-                              <div className="message-row">
-                                <strong>{message.is_user ? "Người dùng" : "SummVi"}</strong>
-                                <span>{formatDate(message.created_at)}</span>
-                              </div>
-                              <p>{message.content}</p>
-                            </div>
+                              ★
+                            </button>
                           ))}
                         </div>
-                      </div>
-
-                      <div className="feedback-card">
-                        <div className="mini-header">
-                          <h4>Phản hồi</h4>
-                        </div>
-                        <textarea
-                          className="feedback-textarea"
-                          onChange={(event) => setFeedback(event.target.value)}
-                          placeholder="Mô tả vấn đề về model, tốc độ, chất lượng summary..."
-                          value={feedback}
-                        />
-                        <button
-                          className="copy-btn save-rating-btn"
-                          disabled={!selectedConversationId || savingRating}
-                          onClick={() => handleSaveRating(ratingValue)}
-                          type="button"
-                        >
-                          {savingRating ? "Đang lưu..." : "Lưu đánh giá"}
+                        <button className="copy-btn" onClick={handleCopySummary} type="button">
+                          Sao chép
                         </button>
-                        <p className="rating-note">
-                          {currentRating
-                            ? `Đánh giá hiện tại: ${currentRating.rating}/5`
-                            : "Chưa có đánh giá cho hội thoại này."}
-                        </p>
                       </div>
                     </div>
+
+                    {submitting || conversationLoading ? (
+                      <div className="loading-state" id="loadingState">
+                        <div className="spinner-container">
+                          <div className="spinner" />
+                        </div>
+                        <div className="loading-text">
+                          <div className="skeleton line long" />
+                          <div className="skeleton line medium" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="final-output" id="finalOutput">
+                        {!(latestResult || messages.length > 0) ? (
+                          <p className="empty-output">Chưa có kết quả tóm tắt.</p>
+                        ) : (
+                          renderFormattedContent(
+                            latestResult?.summary ||
+                            latestResult?.content ||
+                            [...messages].reverse().find((m) => !m.is_user)?.content
+                          )
+                        )}
+
+                        <div className="metrics-strip">
+                          <div className="metric-chip">
+                            <span>Tỷ lệ chiều dài</span>
+                            <strong>{lengthRatio.toFixed(3)}</strong>
+                          </div>
+                          <div className="metric-chip">
+                            <span>Tỷ lệ nén</span>
+                            <strong>{compressionRatio.toFixed(3)}</strong>
+                          </div>
+                          <div className="metric-chip">
+                            <span>Số chữ summary</span>
+                            <strong>{summaryWordCount}</strong>
+                          </div>
+                          <div className="metric-chip">
+                            <span>Số chữ đầu vào</span>
+                            <strong>{inputWordCount}</strong>
+                          </div>
+                          <div className="metric-chip">
+                            <span>Thời gian tạo</span>
+                            <strong>{formatDate(latestResult?.created_at)}</strong>
+                          </div>
+                        </div>
+
+                        <div className="result-subgrid">
+                          <div className="transcript-card">
+                            <div className="mini-header">
+                              <h4>Transcript hội thoại</h4>
+                              {selectedConversationId ? (
+                                <button
+                                  className="clear-btn"
+                                  onClick={() => handleDeleteConversation()}
+                                  type="button"
+                                >
+                                  Xóa hội thoại
+                                </button>
+                              ) : null}
+                            </div>
+                            <div className="message-list">
+                              {messages.length === 0 ? <p>Chưa có tin nhắn nào.</p> : null}
+                              {messages.map((message) => (
+                                <div
+                                  key={message.id}
+                                  className={`message-bubble ${message.is_user ? "user" : "assistant"
+                                    }`}
+                                >
+                                  <div className="message-row">
+                                    <strong>{message.is_user ? "Người dùng" : "SummVi"}</strong>
+                                    <span>{formatDate(message.created_at)}</span>
+                                  </div>
+                                  {message.is_user ? (
+                                    <p>{message.content}</p>
+                                  ) : (
+                                    renderFormattedContent(message.content)
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="feedback-card">
+                            <div className="mini-header">
+                              <h4>Phản hồi</h4>
+                            </div>
+                            <textarea
+                              className="feedback-textarea"
+                              onChange={(event) => setFeedback(event.target.value)}
+                              placeholder="Mô tả vấn đề về model, tốc độ, chất lượng summary..."
+                              value={feedback}
+                            />
+                            <button
+                              className="copy-btn save-rating-btn"
+                              disabled={!selectedConversationId || savingRating}
+                              onClick={() => handleSaveRating(ratingValue)}
+                              type="button"
+                            >
+                              {savingRating ? "Đang lưu..." : "Lưu đánh giá"}
+                            </button>
+                            <p className="rating-note">
+                              {currentRating
+                                ? `Đánh giá hiện tại: ${currentRating.rating}/5`
+                                : "Chưa có đánh giá cho hội thoại này."}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
+            ) : activeView === "history" ? (
+              renderHistoryView()
+            ) : (
+              renderDetailView()
             )}
           </div>
         </main>
@@ -750,4 +993,3 @@ export default function WorkspacePage() {
     </>
   );
 }
-

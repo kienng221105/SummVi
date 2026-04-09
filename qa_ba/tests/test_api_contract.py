@@ -11,14 +11,21 @@ from app.api.routes import summarize as summarize_route
 
 
 class StubSummarizationService:
-    def summarize(self, text: str) -> SummarizeResponse:
+    def summarize(
+        self,
+        text: str,
+        summary_length: str = "medium",
+        output_format: str = "paragraph",
+    ) -> SummarizeResponse:
         return SummarizeResponse(
             summary=text[:32],
             metrics={"length_ratio": 0.4, "compression_ratio": 0.6},
         )
 
 
-class ApiContractTestCase(unittest.TestCase):
+import asyncio
+
+class ApiContractTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         summarize_route.get_service.cache_clear()
         self.original_factory = summarize_route.get_service
@@ -27,15 +34,16 @@ class ApiContractTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         summarize_route.get_service = self.original_factory
 
-    def test_summarize_contract(self):
-        payload = summarize_route.summarize(
+    async def test_summarize_contract(self):
+        coro = summarize_route.summarize(
             SummarizeRequest(
                 text=(
                     "Thành phố Hà Nội thử nghiệm làn đường ưu tiên cho xe buýt điện tại một số tuyến chính. "
                     "Dự án giúp tăng độ đúng giờ, giảm ùn tắc và khuyến khích người dân sử dụng giao thông công cộng."
                 )
             )
-        ).model_dump()
+        )
+        payload = (await coro).model_dump()
 
         self.assertIsInstance(payload["summary"], str)
         self.assertIn("length_ratio", payload["metrics"])

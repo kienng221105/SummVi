@@ -2,10 +2,16 @@ function normalizeBaseUrl(value, fallback) {
   return (value || fallback).replace(/\/$/, "");
 }
 
-const API_BASE_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL, "/api");
+const IS_PROD = typeof window !== "undefined" && !window.location.hostname.includes("localhost");
+
+const API_BASE_URL = normalizeBaseUrl(
+  process.env.NEXT_PUBLIC_API_BASE_URL,
+  IS_PROD ? "" : "http://localhost:8000"
+);
+
 const LEGACY_API_BASE_URL = normalizeBaseUrl(
   process.env.NEXT_PUBLIC_LEGACY_API_BASE_URL,
-  `${API_BASE_URL}/v1`,
+  IS_PROD ? "/api/v1" : "http://localhost:8000/api/v1"
 );
 
 function buildHeaders(token, isJson = true) {
@@ -95,6 +101,26 @@ export async function loginUser({ email, password }) {
 
 export async function getCurrentUser(token) {
   return request("/auth/me", { token });
+}
+
+export async function uploadDocument(token, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/ai/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || "Không thể tải tài liệu.");
+  }
+
+  return response.json();
 }
 
 export async function summarizeText(token, payload) {

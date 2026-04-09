@@ -32,7 +32,7 @@ export default function AuthPage({ mode, title, subtitle }) {
 
     try {
       if (!isLogin && !acceptedTerms) {
-        throw new Error("Can dong y voi dieu khoan truoc khi tao tai khoan.");
+        throw new Error("Cần đồng ý với điều khoản trước khi tạo tài khoản.");
       }
 
       if (isLogin) {

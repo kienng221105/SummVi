@@ -12,10 +12,11 @@ class Settings:
     app_version: str = "2.0.0"
     api_prefix: str = "/api/v1"
     cors_origins: tuple[str, ...] = ("*",)
-    secret_key: str = os.getenv("SECRET_KEY", "summvi-development-secret")
+    lite_mode: bool = os.getenv("LITE_MODE", "false").lower() in {"1", "true", "yes", "on"}
+    secret_key: str = os.getenv("SECRET_KEY", "")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
     default_admin_email: str = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@summvi.local")
-    default_admin_password: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "Admin@123")
+    default_admin_password: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "")
     postgres_host: str = os.getenv("POSTGRES_HOST", "localhost")
     postgres_port: int = int(os.getenv("POSTGRES_PORT", "5432"))
     postgres_db: str = os.getenv("POSTGRES_DB", "summarization")

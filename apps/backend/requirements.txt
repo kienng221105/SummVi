@@ -11,3 +11,5 @@ pandas
 python-dotenv
 pytest
 python-multipart
+pymupdf
+python-docx

@@ -40,21 +40,21 @@ def get_admin_analytics(db: Session) -> dict[str, Any]:
     success_rate = ((total_logs - len(error_logs)) / total_logs * 100) if total_logs else 100.0
 
     overview = [
-        _metric("Tong users", total_users, detail=f"{active_users} active / {admin_users} admin"),
+        _metric("Tổng users", total_users, detail=f"{active_users} active / {admin_users} admin"),
         _metric("Conversations", len(conversations), detail=f"{len(messages)} messages"),
         _metric("Documents", len(documents), detail=f"{sum(doc.chunk_count or 0 for doc in documents)} total chunks"),
-        _metric("Requests", total_logs, detail=f"{len(error_logs)} loi gan day"),
+        _metric("Requests", total_logs, detail=f"{len(error_logs)} lỗi gần đây"),
     ]
 
     system_metrics = [
         _metric("Success rate", round(success_rate, 2), unit="%"),
         _metric("Avg latency", round(_avg([log.response_time for log in logs]), 2), unit="ms"),
         _metric("Error logs", len(error_logs), detail="HTTP >= 400"),
-        _metric("Unique endpoints", len({log.endpoint for log in logs}), detail="Tu system logs"),
+        _metric("Unique endpoints", len({log.endpoint for log in logs}), detail="Từ system logs"),
     ]
 
     model_metrics = [
-        _metric("Inference requests", len(inference_logs), detail="So lan model duoc goi"),
+        _metric("Inference requests", len(inference_logs), detail="Số lần model được gọi"),
         _metric("Avg model latency", round(_avg([log.latency for log in inference_logs]), 3), unit="s"),
         _metric("Avg generation", round(_avg([log.generation_latency for log in inference_logs]), 3), unit="s"),
         _metric("Fallback rate", round(_ratio(sum(1 for log in inference_logs if log.used_model_fallback), len(inference_logs)), 2), unit="%"),
@@ -67,7 +67,7 @@ def get_admin_analytics(db: Session) -> dict[str, Any]:
         _metric("Avg input words", round(_avg([log.input_word_count for log in inference_logs]), 2)),
         _metric("Avg summary words", round(_avg([log.summary_word_count for log in inference_logs]), 2)),
         _metric("Avg rating", round(avg_rating, 2), detail=f"{len(ratings)} feedbacks"),
-        _metric("User activities", len(activities), detail="Hanh dong gan day"),
+        _metric("User activities", len(activities), detail="Hành động gần đây"),
         _metric("Avg chunk count", round(_avg([doc.chunk_count for doc in documents]), 2)),
         _metric("Distinct embedding", len({doc.embedding_model for doc in documents if doc.embedding_model})),
     ]

@@ -2,6 +2,13 @@ from contextlib import asynccontextmanager
 import traceback
 from time import perf_counter
 from uuid import uuid4
+import sys
+from pathlib import Path
+
+# Add project root to sys.path to allow importing 'ml' module
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
