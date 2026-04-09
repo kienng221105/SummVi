@@ -11,7 +11,7 @@ $env:NODE_OPTIONS = "--max-old-space-size=4096"
 
 # Start Backend in new window
 Write-Host "Starting Backend..."
-Start-Process powershell -ArgumentList "-NoExit -Command cd apps/backend; python -m uvicorn app.main:app --port 8000 --reload"
+Start-Process powershell -ArgumentList "-NoExit -Command cd apps/backend; python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 # Start Frontend in new window
 Write-Host "Starting Frontend..."

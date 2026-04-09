@@ -4,15 +4,17 @@ function normalizeBaseUrl(value, fallback) {
 
 const IS_PROD = typeof window !== "undefined" && !window.location.hostname.includes("localhost");
 
-const API_BASE_URL = normalizeBaseUrl(
-  process.env.NEXT_PUBLIC_API_BASE_URL,
-  IS_PROD ? "" : "http://localhost:8000"
-);
+const getDynamicBaseUrl = (envValue, port) => {
+  if (envValue && !envValue.includes("localhost")) return normalizeBaseUrl(envValue, "");
+  if (typeof window !== "undefined") {
+    const { hostname, protocol } = window.location;
+    return `${protocol}//${hostname}:${port}`;
+  }
+  return `http://localhost:${port}`;
+};
 
-const LEGACY_API_BASE_URL = normalizeBaseUrl(
-  process.env.NEXT_PUBLIC_LEGACY_API_BASE_URL,
-  IS_PROD ? "/api/v1" : "http://localhost:8000/api/v1"
-);
+const API_BASE_URL = getDynamicBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL, 8000);
+const LEGACY_API_BASE_URL = getDynamicBaseUrl(process.env.NEXT_PUBLIC_LEGACY_API_BASE_URL, 8000) + "/api/v1";
 
 function buildHeaders(token, isJson = true) {
   const headers = {};
