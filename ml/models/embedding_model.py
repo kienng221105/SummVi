@@ -13,12 +13,18 @@ class EmbeddingModel:
         self.cache_dir = Path(cache_dir or os.getenv("HF_HOME", "./data/models/cache")).resolve()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("HF_HOME", str(self.cache_dir))
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
         self.model = None
         self.load_error: str | None = None
 
         try:
-            self.model = SentenceTransformer(model_name, cache_folder=str(self.cache_dir))
+            self.model = SentenceTransformer(
+                model_name,
+                cache_folder=str(self.cache_dir),
+                local_files_only=True,
+            )
         except Exception as exc:
             self.load_error = str(exc)
 

@@ -21,6 +21,8 @@ class ViT5Model:
         self.cache_dir = Path(cache_dir or os.getenv("HF_HOME", "./data/models/cache")).resolve()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("HF_HOME", str(self.cache_dir))
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.tokenizer = None
@@ -32,10 +34,12 @@ class ViT5Model:
                 selected_model,
                 use_fast=False,
                 cache_dir=str(self.cache_dir),
+                local_files_only=True,
             )
             self.model = AutoModelForSeq2SeqLM.from_pretrained(
                 selected_model,
                 cache_dir=str(self.cache_dir),
+                local_files_only=True,
             )
             self.model.to(self.device)
             self.model.eval()
