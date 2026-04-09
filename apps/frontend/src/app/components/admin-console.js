@@ -3,6 +3,20 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  CheckCircle,
+  Database,
+  LayoutDashboard,
+  LogOut,
+  RefreshCcw,
+  Settings,
+  ShieldCheck,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 
 import {
   getAdminAnalytics,
@@ -17,11 +31,11 @@ import {
 import { useSessionGuard } from "../lib/session-guard";
 
 const NAV_ITEMS = [
-  { id: "overview", label: "Tổng quan" },
-  { id: "users", label: "Quản lý người dùng" },
-  { id: "logs", label: "Logs và hiệu suất" },
-  { id: "model", label: "Giám sát model" },
-  { id: "data", label: "Dữ liệu và RAG" },
+  { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
+  { id: "users", label: "Quản lý người dùng", icon: Users },
+  { id: "logs", label: "Logs và hiệu suất", icon: Activity },
+  { id: "model", label: "Giám sát model", icon: BarChart3 },
+  { id: "data", label: "Dữ liệu và RAG", icon: Database },
 ];
 
 function formatDate(value) {
@@ -41,62 +55,150 @@ function formatMetricValue(metric) {
   return `${metric.value}${metric.unit || ""}`;
 }
 
-function ChartCard({ title, subtitle, points = [], mode = "vertical", accent = "b-purple" }) {
-  const maxValue = Math.max(...points.map((point) => Number(point.value) || 0), 1);
+// --- NEW ANALYTICS COMPONENTS ---
+
+function Sparkline({ points = [], color = "#8884d8" }) {
+  if (points.length < 2) return null;
+  const values = points.map(p => Number(p.value) || 0);
+  const min = Math.min(...values);
+  const max = Math.max(...values, min + 1);
+  const range = max - min;
+
+  const width = 100;
+  const height = 30;
+
+  const d = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - ((v - min) / range) * height;
+    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' ');
 
   return (
-    <div className="panel chart-card-panel">
-      <div className="panel-header">
-        <div>
-          <h3>{title}</h3>
-          {subtitle ? <p className="panel-subtitle">{subtitle}</p> : null}
-        </div>
-      </div>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="sparkline">
+      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
-      {points.length === 0 ? (
-        <p className="empty-state">Chưa có dữ liệu cho biểu đồ này.</p>
-      ) : mode === "horizontal" ? (
-        <div className="horizontal-chart">
-          {points.map((point) => (
-            <div key={`${title}-${point.label}`} className="hbar-row">
-              <div className="hbar-label-row">
-                <span>{point.label}</span>
-                <strong>{point.value}</strong>
-              </div>
-              <div className="hbar-track">
-                <div
-                  className={`hbar-fill ${accent}`}
-                  style={{ width: `${Math.max((Number(point.value) / maxValue) * 100, 4)}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="mock-chart">
-          {points.map((point) => (
-            <div key={`${title}-${point.label}`} className="bar-col wide">
-              <div
-                className={`bar ${accent}`}
-                style={{ height: `${Math.max((Number(point.value) / maxValue) * 100, 8)}%` }}
-              />
-              <span className="label">{point.label}</span>
-              <span className="chart-value">{point.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
+function AreaChart({ points = [], color = "#a78bfa" }) {
+  if (points.length < 2) return <p className="empty-state">Chưa đủ dữ liệu.</p>;
+  const values = points.map(p => Number(p.value) || 0);
+  const maxValue = Math.max(...values, 10);
+  const width = 100;
+  const height = 40;
+
+  const areaD = [
+    `M 0 ${height}`,
+    ...values.map((v, i) => `L ${(i / (values.length - 1)) * width} ${height - (v / maxValue) * height}`),
+    `L ${width} ${height}`,
+    'Z'
+  ].join(' ');
+
+  const lineD = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - (v / maxValue) * height;
+    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' ');
+
+  return (
+    <div className="svg-chart-container">
+      <svg width="100%" height="120px" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={`grad-${color}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.4" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={areaD} fill={`url(#grad-${color})`} />
+        <path d={lineD} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+      </svg>
+      <div className="chart-x-axis">
+        {points.map((p, i) => (i % 2 === 0 ? <span key={p.label}>{p.label}</span> : null))}
+      </div>
     </div>
   );
 }
 
-function MetricCollection({ title, subtitle, metrics = [] }) {
+function DonutChart({ points = [] }) {
+  if (points.length === 0) return null;
+  const colors = ["#a78bfa", "#60a5fa", "#34d399", "#fb923c", "#f87171", "#94a3b8"];
+  const total = points.reduce((acc, p) => acc + (Number(p.value) || 0), 0);
+  let currentAngle = 0;
+
+  return (
+    <div className="donut-container">
+      <svg width="140" height="140" viewBox="0 0 42 42" className="donut">
+        <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="var(--bg-panel)" strokeWidth="5" />
+        {points.map((p, i) => {
+          const val = (Number(p.value) || 0);
+          const percent = (val / total) * 100;
+          const offset = 100 - currentAngle + 25;
+          currentAngle += percent;
+          return (
+            <circle
+              key={p.label}
+              cx="21" cy="21" r="15.915"
+              fill="transparent"
+              stroke={colors[i % colors.length]}
+              strokeWidth="5"
+              strokeDasharray={`${percent} ${100 - percent}`}
+              strokeDashoffset={offset}
+            />
+          );
+        })}
+        <g className="donut-text">
+          <text x="50%" y="50%" className="donut-number">{total}</text>
+          <text x="50%" y="50%" className="donut-label">Total</text>
+        </g>
+      </svg>
+      <div className="donut-legend">
+        {points.map((p, i) => (
+          <div key={p.label} className="legend-item">
+            <span className="dot" style={{ backgroundColor: colors[i % colors.length] }} />
+            <span className="label text-truncate">{p.label}</span>
+            <span className="value">{p.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChartCard({ title, subtitle, points = [], type = "area", accent = "#a78bfa", icon: Icon }) {
+  return (
+    <div className="panel chart-card-panel">
+      <div className="panel-header">
+        <div className="title-with-icon">
+          {Icon && <Icon size={18} className="text-secondary" />}
+          <div>
+            <h3>{title}</h3>
+            {subtitle ? <p className="panel-subtitle">{subtitle}</p> : null}
+          </div>
+        </div>
+      </div>
+      <div className="chart-body">
+        {points.length === 0 ? (
+          <p className="empty-state">Chưa có dữ liệu cho biểu đồ này.</p>
+        ) : type === "donut" ? (
+          <DonutChart points={points} />
+        ) : (
+          <AreaChart points={points} color={accent} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MetricCollection({ title, subtitle, metrics = [], icon: Icon }) {
   return (
     <div className="panel">
       <div className="panel-header">
-        <div>
-          <h3>{title}</h3>
-          {subtitle ? <p className="panel-subtitle">{subtitle}</p> : null}
+        <div className="title-with-icon">
+          {Icon && <Icon size={18} className="text-secondary" />}
+          <div>
+            <h3>{title}</h3>
+            {subtitle ? <p className="panel-subtitle">{subtitle}</p> : null}
+          </div>
         </div>
       </div>
 
@@ -113,13 +215,16 @@ function MetricCollection({ title, subtitle, metrics = [] }) {
   );
 }
 
-function InsightTable({ title, subtitle, columns, rows = [] }) {
+function InsightTable({ title, subtitle, columns, rows = [], icon: Icon }) {
   return (
     <div className="panel">
       <div className="panel-header">
-        <div>
-          <h3>{title}</h3>
-          {subtitle ? <p className="panel-subtitle">{subtitle}</p> : null}
+        <div className="title-with-icon">
+          {Icon && <Icon size={18} className="text-secondary" />}
+          <div>
+            <h3>{title}</h3>
+            {subtitle ? <p className="panel-subtitle">{subtitle}</p> : null}
+          </div>
         </div>
       </div>
 
@@ -199,7 +304,7 @@ export default function AdminConsole() {
       setLogs(logRows);
       setAnalytics(analyticsPayload);
     } catch (requestError) {
-      setError(requestError.message || "Khong the tai du lieu admin.");
+      setError(requestError.message || "Không thể tải dữ liệu admin.");
     } finally {
       setLoading(false);
     }
@@ -213,7 +318,7 @@ export default function AdminConsole() {
       await updateUserRole(session.token, userId, role);
       await loadAdminData(session.token);
     } catch (requestError) {
-      setError(requestError.message || "Khong the cap nhat role.");
+      setError(requestError.message || "Không thể cập nhật role.");
     }
   }
 
@@ -324,7 +429,7 @@ export default function AdminConsole() {
           </div>
           <div className="topbar-actions">
             <button className="btn-outline" onClick={() => loadAdminData(session.token)} type="button">
-              Lam moi
+              <RefreshCcw size={14} className="mr-2" /> Làm mới
             </button>
             <div className="status-indicator">
               <span className="dot pulse" />
@@ -339,51 +444,57 @@ export default function AdminConsole() {
           {activeSection === "overview" ? (
             <section className="section-stack">
               <div className="stats-grid">
-                {summaryMetrics.map((metric) => (
-                  <div key={metric.label} className="stat-card">
-                    <div className="stat-header">
-                      <div className="stat-icon b-purple">KPI</div>
-                      <span className="trend positive">{metric.detail || "Overview"}</span>
+                {summaryMetrics.map((metric, idx) => {
+                  const chartData = idx === 0 ? charts.request_volume : idx === 3 ? charts.error_volume : [];
+                  return (
+                    <div key={metric.label} className="stat-card">
+                      <div className="stat-header">
+                        <div className="stat-icon b-purple"><TrendingUp size={16} /></div>
+                        <Sparkline points={chartData} color={idx === 3 ? "#f87171" : "#a78bfa"} />
+                      </div>
+                      <h3>{formatMetricValue(metric)}</h3>
+                      <p>{metric.label}</p>
+                      <span className="panel-subtitle">{metric.detail}</span>
                     </div>
-                    <h3>{formatMetricValue(metric)}</h3>
-                    <p>{metric.label}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="chart-grid chart-grid-2">
                 <ChartCard
-                  accent="b-purple"
+                  accent="#a78bfa"
+                  icon={Activity}
                   points={charts.request_volume}
-                  subtitle="Tổng request system theo ngày"
-                  title="Lưu lượng request"
+                  subtitle="Tổng request hệ thống theo ngày"
+                  title="Lưu lượng Request"
                 />
                 <ChartCard
-                  accent="b-orange"
+                  accent="#f87171"
+                  icon={AlertCircle}
                   points={charts.error_volume}
-                  subtitle="Số request lỗi theo ngày"
-                  title="Lưu lượng lỗi"
+                  subtitle="Số request lỗi ghi nhận theo ngày"
+                  title="Tỷ lệ Lỗi"
                 />
                 <ChartCard
-                  accent="b-blue"
-                  mode="horizontal"
+                  type="donut"
+                  icon={Database}
                   points={charts.endpoint_distribution}
-                  subtitle="Top endpoint có lưu lượng cao"
-                  title="Phân bố endpoint"
+                  subtitle="Các endpoint có lưu lượng cao"
+                  title="Phân bổ Endpoint"
                 />
                 <ChartCard
-                  accent="b-green"
-                  mode="horizontal"
+                  type="donut"
+                  icon={ShieldCheck}
                   points={charts.status_distribution}
-                  subtitle="Phan bo trang thai HTTP"
-                  title="Phân bố trạng thái"
+                  subtitle="Phân bổ trạng thái phản hồi HTTP"
+                  title="Trạng thái Phản hồi"
                 />
               </div>
 
               <div className="chart-grid chart-grid-3">
-                <MetricCollection metrics={systemMetrics} subtitle="Chỉ số vận hành API và app" title="System metrics" />
-                <MetricCollection metrics={modelMetrics} subtitle="Chỉ số inference và chất lượng model" title="Model metrics" />
-                <MetricCollection metrics={dataMetrics} subtitle="Chỉ số dữ liệu, feedback và chunking" title="Data metrics" />
+                <MetricCollection icon={Settings} metrics={systemMetrics} subtitle="Chỉ số vận hành API và ứng dụng" title="Hệ thống" />
+                <MetricCollection icon={BarChart3} metrics={modelMetrics} subtitle="Chỉ số inference và chất lượng model" title="Model AI" />
+                <MetricCollection icon={Database} metrics={dataMetrics} subtitle="Chỉ số dữ liệu và feedback" title="Dữ liệu & RAG" />
               </div>
             </section>
           ) : null}
@@ -392,37 +503,39 @@ export default function AdminConsole() {
             <section className="section-stack">
               <div className="chart-grid chart-grid-2">
                 <ChartCard
-                  accent="b-blue"
+                  accent="#3b82f6"
+                  icon={Users}
                   points={charts.user_growth}
-                  subtitle="User mới theo ngày"
-                  title="Tăng trưởng user"
+                  subtitle="Người dùng mới tham gia theo ngày"
+                  title="Tăng trưởng Người dùng"
                 />
                 <ChartCard
-                  accent="b-purple"
-                  mode="horizontal"
+                  type="donut"
+                  icon={Activity}
                   points={tables.activity_leaders?.map((row) => ({ label: row.label, value: row.value })) || []}
-                  subtitle="Top user co nhieu hanh dong nhat"
-                  title="Activity leaders"
+                  subtitle="Người dùng có nhiều hành động nhất"
+                  title="Người dùng Tích cực"
                 />
               </div>
 
               <InsightTable
+                icon={ShieldCheck}
                 columns={[
                   { key: "email", label: "Email", render: (value) => <code>{value}</code> },
-                  { key: "role", label: "Role" },
+                  { key: "role", label: "Quyền hạn" },
                   {
                     key: "is_active",
-                    label: "Status",
+                    label: "Trạng thái",
                     render: (value) => (
                       <span className={`status-badge ${value ? "success" : "error"}`}>
-                        {value ? "active" : "inactive"}
+                        {value ? "Hoạt động" : "Khóa"}
                       </span>
                     ),
                   },
-                  { key: "created_at", label: "Created", render: (value) => formatDate(value) },
+                  { key: "created_at", label: "Ngày tham gia", render: (value) => formatDate(value) },
                   {
                     key: "id",
-                    label: "Action",
+                    label: "Thao tác",
                     render: (_value, row) => (
                       <div className="action-cell">
                         <button
@@ -431,7 +544,7 @@ export default function AdminConsole() {
                           onClick={() => handleRoleChange(row.id, "admin")}
                           type="button"
                         >
-                          Make admin
+                          Cấp Admin
                         </button>
                         <button
                           className="btn-outline"
@@ -439,15 +552,15 @@ export default function AdminConsole() {
                           onClick={() => handleRoleChange(row.id, "user")}
                           type="button"
                         >
-                          Set user
+                          Gỡ quyền
                         </button>
                       </div>
                     ),
                   },
                 ]}
                 rows={users}
-                subtitle="Danh sach user va thao tac role"
-                title="Quản lý người dùng"
+                subtitle="Danh sách người dùng và phân quyền"
+                title="Quản lý Người dùng"
               />
             </section>
           ) : null}
@@ -456,173 +569,176 @@ export default function AdminConsole() {
             <section className="section-stack">
               <div className="chart-grid chart-grid-2">
                 <ChartCard
-                  accent="b-purple"
+                  accent="#a78bfa"
+                  icon={Activity}
                   points={charts.request_volume}
-                  subtitle="Tổng request 7 ngày"
-                  title="Request trend"
+                  subtitle="Xu hướng request trong 7 ngày gần nhất"
+                  title="Xu hướng Request"
                 />
                 <ChartCard
-                  accent="b-orange"
+                  accent="#f59e0b"
+                  icon={TrendingUp}
                   points={charts.latency_trend}
-                  subtitle="Latency trung bình theo ngày"
-                  title="Latency trend"
+                  subtitle="Độ trễ trung bình của hệ thống theo ngày"
+                  title="Xu hướng Độ trễ"
                 />
                 <ChartCard
-                  accent="b-green"
-                  mode="horizontal"
+                  type="donut"
+                  icon={CheckCircle}
                   points={charts.endpoint_distribution}
-                  subtitle="Top endpoint duoc goi nhieu nhat"
-                  title="Endpoint traffic"
+                  subtitle="Các endpoint được gọi nhiều nhất"
+                  title="Lưu lượng Endpoint"
                 />
                 <ChartCard
-                  accent="b-blue"
-                  mode="horizontal"
+                  type="donut"
+                  icon={AlertCircle}
                   points={tables.top_endpoints?.map((row) => ({ label: row.label, value: row.value })) || []}
-                  subtitle="Top endpoint theo luong request"
-                  title="Top endpoints"
+                  subtitle="Thống kê tải theo từng endpoint"
+                  title="Top Endpoints"
                 />
               </div>
 
               <InsightTable
+                icon={Activity}
                 columns={[
                   {
                     key: "status_code",
-                    label: "Status",
+                    label: "Trạng thái",
                     render: (value) => (
                       <span className={`status-badge ${Number(value) < 400 ? "success" : "error"}`}>{value}</span>
                     ),
                   },
                   { key: "endpoint", label: "Endpoint", render: (value) => <code>{value}</code> },
-                  { key: "method", label: "Method" },
-                  { key: "response_time", label: "Latency", render: (value) => `${value ?? "--"}ms` },
-                  { key: "user_id", label: "User", render: (value) => value || "anonymous" },
+                  { key: "method", label: "Phương thức" },
+                  { key: "response_time", label: "Độ trễ", render: (value) => `${value ?? "--"}ms` },
+                  { key: "user_id", label: "Người dùng", render: (value) => value || "vô danh" },
                   { key: "created_at", label: "Thời gian", render: (value) => formatDate(value) },
                 ]}
                 rows={logs}
-                subtitle="System logs gần nhất"
-                title="Logs và hiệu suất"
+                subtitle="Nhật ký hệ thống gần đây"
+                title="Logs và Hiệu suất"
               />
 
               <InsightTable
+                icon={AlertCircle}
                 columns={[
                   { key: "label", label: "Endpoint", render: (value) => <code>{value}</code> },
-                  { key: "value", label: "Status" },
-                  { key: "secondary", label: "Error type" },
-                  { key: "tertiary", label: "Message" },
-                  { key: "created_at", label: "Thoi gian", render: (value) => formatDate(value) },
+                  { key: "value", label: "Mã lỗi" },
+                  { key: "secondary", label: "Loại lỗi" },
+                  { key: "tertiary", label: "Thông báo" },
+                  { key: "created_at", label: "Thời gian", render: (value) => formatDate(value) },
                 ]}
                 rows={tables.recent_errors || []}
-                subtitle="Lỗi gần nhất để debug nhanh"
-                title="Lỗi gần nhất"
+                subtitle="Danh sách các lỗi mới nhất để xử lý nhanh"
+                title="Lỗi Gần đây"
               />
             </section>
           ) : null}
 
           {activeSection === "model" ? (
             <section className="section-stack">
-              <MetricCollection metrics={modelMetrics} subtitle="Chỉ số tổng quan của model" title="Sức khỏe model" />
+              <MetricCollection icon={BarChart3} metrics={modelMetrics} subtitle="Chỉ số phản ánh độ ổn định của trí tuệ nhân tạo" title="Sức khỏe Model AI" />
 
               <div className="chart-grid chart-grid-2">
                 <ChartCard
-                  accent="b-purple"
+                  accent="#a78bfa"
+                  icon={Activity}
                   points={charts.inference_volume}
-                  subtitle="So request inference theo ngay"
-                  title="Lưu lượng inference"
+                  subtitle="Số lượt model thực hiện tóm tắt theo ngày"
+                  title="Lưu lượng Inference"
                 />
                 <ChartCard
-                  accent="b-green"
+                  accent="#10b981"
+                  icon={TrendingUp}
                   points={charts.compression_trend}
-                  subtitle="Compression ratio trung binh theo ngay"
-                  title="Xu hướng compression"
+                  subtitle="Tỷ lệ nén văn bản trung bình ghi nhận"
+                  title="Xu hướng Nén văn bản"
                 />
                 <ChartCard
-                  accent="b-orange"
-                  mode="horizontal"
+                  type="donut"
+                  icon={Settings}
                   points={charts.stage_latency_breakdown}
-                  subtitle="Độ trễ trung bình theo stage"
-                  title="Phân rã độ trễ theo stage"
+                  subtitle="Phân bố độ trễ theo từng giai đoạn xử lý"
+                  title="Phân tách quy trình"
                 />
                 <ChartCard
-                  accent="b-blue"
-                  mode="horizontal"
+                  type="donut"
+                  icon={Database}
                   points={charts.backend_distribution}
-                  subtitle="Backend generation hiện đang phục vụ"
-                  title="Backend sinh summary"
+                  subtitle="Các backend đang phục vụ tóm tắt"
+                  title="Phân bổ Backend"
                 />
                 <ChartCard
-                  accent="b-green"
-                  mode="horizontal"
+                  type="donut"
+                  icon={ShieldCheck}
                   points={charts.device_distribution}
-                  subtitle="Model đang chạy trên thiết bị nào"
-                  title="Phân bố thiết bị"
-                />
-                <ChartCard
-                  accent="b-purple"
-                  mode="horizontal"
-                  points={tables.recent_inference?.map((row) => ({ label: row.label, value: row.value })) || []}
-                  subtitle="Độ trễ của các inference gần nhất"
-                  title="Độ trễ inference gần nhất"
+                  subtitle="Phần cứng đang vận hành model (CPU/GPU)"
+                  title="Thiết bị Vận hành"
                 />
               </div>
 
               <InsightTable
+                icon={BarChart3}
                 columns={[
-                  { key: "label", label: "Model / backend" },
-                  { key: "value", label: "Latency (s)" },
-                  { key: "secondary", label: "Compression" },
-                  { key: "tertiary", label: "Device" },
+                  { key: "label", label: "Model / Backend" },
+                  { key: "value", label: "Độ trễ (s)" },
+                  { key: "secondary", label: "Tỷ lệ nén" },
+                  { key: "tertiary", label: "Thiết bị" },
                   { key: "created_at", label: "Thời gian", render: (value) => formatDate(value) },
                 ]}
                 rows={tables.recent_inference || []}
-                subtitle="Bản ghi inference mới nhất"
-                title="Bản ghi inference gần nhất"
+                subtitle="Các bản ghi xử lý AI mới nhất"
+                title="Nhật ký Inference mới nhất"
               />
             </section>
           ) : null}
 
           {activeSection === "data" ? (
             <section className="section-stack">
-              <MetricCollection metrics={dataMetrics} subtitle="Chỉ số dữ liệu, chunking và feedback" title="Sức khỏe dữ liệu và RAG" />
+              <MetricCollection icon={Database} metrics={dataMetrics} subtitle="Chỉ số phản ánh sức khỏe kho dữ liệu vector" title="Dữ liệu & RAG" />
 
               <div className="chart-grid chart-grid-2">
                 <ChartCard
-                  accent="b-blue"
+                  accent="#3b82f6"
+                  icon={TrendingUp}
                   points={charts.chunk_trend}
-                  subtitle="Retrieved chunks trung bình theo ngày"
-                  title="Xu hướng chunk RAG"
+                  subtitle="Số lượng chunk được trích xuất từ tài liệu"
+                  title="Xu hướng Chunk RAG"
                 />
                 <ChartCard
-                  accent="b-purple"
-                  mode="horizontal"
+                  type="donut"
+                  icon={Activity}
                   points={charts.activity_distribution}
-                  subtitle="Phân bố action của user"
-                  title="Phân bố hoạt động user"
+                  subtitle="Các hành động chính của người dùng"
+                  title="Phân bổ Hành động"
                 />
                 <ChartCard
-                  accent="b-orange"
-                  mode="horizontal"
+                  type="donut"
+                  icon={AlertCircle}
                   points={charts.rating_distribution}
-                  subtitle="Phân bố feedback rating"
-                  title="Phân bố rating"
+                  subtitle="Phản hồi từ người dùng về chất lượng"
+                  title="Phân bổ Đánh giá"
                 />
                 <ChartCard
-                  accent="b-green"
+                  accent="#10b981"
+                  icon={Users}
                   points={charts.user_growth}
-                  subtitle="Tăng trưởng người dùng để đối chiếu với data volume"
-                  title="Tăng trưởng user so với tải dữ liệu"
+                  subtitle="Đối chiếu tăng trưởng người dùng và dữ liệu"
+                  title="Tương quan Người dùng"
                 />
               </div>
 
               <InsightTable
+                icon={Database}
                 columns={[
-                  { key: "label", label: "Endpoint / User" },
-                  { key: "value", label: "Giá trị" },
-                  { key: "secondary", label: "Thông tin thêm" },
-                  { key: "status", label: "Status" },
+                  { key: "label", label: "Đối tượng / User", render: (value) => <code>{value}</code> },
+                  { key: "value", label: "Số lượng" },
+                  { key: "secondary", label: "Thông tin chi tiết" },
+                  { key: "status", label: "Trạng thái" },
                 ]}
                 rows={tables.top_endpoints || []}
-                subtitle="Bảng đối chiếu traffic và nghiêng tải tài nguyên"
-                title="Phân tích vận hành chi tiết"
+                subtitle="Phân tích chi tiết lưu lượng và tải tài nguyên"
+                title="Phân ích Vận hành"
               />
             </section>
           ) : null}

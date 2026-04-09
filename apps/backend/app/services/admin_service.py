@@ -40,36 +40,36 @@ def get_admin_analytics(db: Session) -> dict[str, Any]:
     success_rate = ((total_logs - len(error_logs)) / total_logs * 100) if total_logs else 100.0
 
     overview = [
-        _metric("Tổng users", total_users, detail=f"{active_users} active / {admin_users} admin"),
-        _metric("Conversations", len(conversations), detail=f"{len(messages)} messages"),
-        _metric("Documents", len(documents), detail=f"{sum(doc.chunk_count or 0 for doc in documents)} total chunks"),
-        _metric("Requests", total_logs, detail=f"{len(error_logs)} lỗi gần đây"),
+        _metric("Tổng người dùng", total_users, detail=f"{active_users} hoạt động / {admin_users} quản trị"),
+        _metric("Hội thoại", len(conversations), detail=f"{len(messages)} tin nhắn"),
+        _metric("Tài liệu", len(documents), detail=f"{sum(doc.chunk_count or 0 for doc in documents)} chunks trích xuất"),
+        _metric("Yêu cầu (Requests)", total_logs, detail=f"{len(error_logs)} lỗi gần đây"),
     ]
 
     system_metrics = [
-        _metric("Success rate", round(success_rate, 2), unit="%"),
-        _metric("Avg latency", round(_avg([log.response_time for log in logs]), 2), unit="ms"),
-        _metric("Error logs", len(error_logs), detail="HTTP >= 400"),
-        _metric("Unique endpoints", len({log.endpoint for log in logs}), detail="Từ system logs"),
+        _metric("Tỷ lệ thành công", round(success_rate, 2), unit="%"),
+        _metric("Độ trễ trung bình", round(_avg([log.response_time for log in logs]), 2), unit="ms"),
+        _metric("Nhật ký lỗi", len(error_logs), detail="HTTP >= 400"),
+        _metric("Điểm cuối (Endpoints)", len({log.endpoint for log in logs}), detail="Từ nhật ký hệ thống"),
     ]
 
     model_metrics = [
-        _metric("Inference requests", len(inference_logs), detail="Số lần model được gọi"),
-        _metric("Avg model latency", round(_avg([log.latency for log in inference_logs]), 3), unit="s"),
-        _metric("Avg generation", round(_avg([log.generation_latency for log in inference_logs]), 3), unit="s"),
-        _metric("Fallback rate", round(_ratio(sum(1 for log in inference_logs if log.used_model_fallback), len(inference_logs)), 2), unit="%"),
-        _metric("Avg compression", round(_avg([log.compression_ratio for log in inference_logs]), 4)),
-        _metric("Avg retrieved chunks", round(_avg([log.retrieved_chunk_count for log in inference_logs]), 2)),
+        _metric("Yêu cầu Inference", len(inference_logs), detail="Số lần gọi model AI"),
+        _metric("Độ trễ Model", round(_avg([log.latency for log in inference_logs]), 3), unit="s"),
+        _metric("Độ trễ sinh văn bản", round(_avg([log.generation_latency for log in inference_logs]), 3), unit="s"),
+        _metric("Tỷ lệ Fallback", round(_ratio(sum(1 for log in inference_logs if log.used_model_fallback), len(inference_logs)), 2), unit="%"),
+        _metric("Tỷ lệ nén trung bình", round(_avg([log.compression_ratio for log in inference_logs]), 4)),
+        _metric("Chunks truy vấn avg", round(_avg([log.retrieved_chunk_count for log in inference_logs]), 2)),
     ]
 
     avg_rating = _avg([rating.rating for rating in ratings])
     data_metrics = [
-        _metric("Avg input words", round(_avg([log.input_word_count for log in inference_logs]), 2)),
-        _metric("Avg summary words", round(_avg([log.summary_word_count for log in inference_logs]), 2)),
-        _metric("Avg rating", round(avg_rating, 2), detail=f"{len(ratings)} feedbacks"),
-        _metric("User activities", len(activities), detail="Hành động gần đây"),
-        _metric("Avg chunk count", round(_avg([doc.chunk_count for doc in documents]), 2)),
-        _metric("Distinct embedding", len({doc.embedding_model for doc in documents if doc.embedding_model})),
+        _metric("Số từ đầu vào avg", round(_avg([log.input_word_count for log in inference_logs]), 2)),
+        _metric("Số từ tóm tắt avg", round(_avg([log.summary_word_count for log in inference_logs]), 2)),
+        _metric("Đánh giá trung bình", round(avg_rating, 2), detail=f"{len(ratings)} phản hồi"),
+        _metric("Hoạt động người dùng", len(activities), detail="Hành động ghi nhận"),
+        _metric("Số chunk trung bình", round(_avg([doc.chunk_count for doc in documents]), 2)),
+        _metric("Model Embedding", len({doc.embedding_model for doc in documents if doc.embedding_model})),
     ]
 
     charts = {
@@ -88,8 +88,8 @@ def get_admin_analytics(db: Session) -> dict[str, Any]:
         ),
         "stage_latency_breakdown": [
             {"label": "RAG", "value": round(_avg([log.rag_latency for log in inference_logs]), 3)},
-            {"label": "Retrieve", "value": round(_avg([log.retrieval_latency for log in inference_logs]), 3)},
-            {"label": "Generate", "value": round(_avg([log.generation_latency for log in inference_logs]), 3)},
+            {"label": "Truy vấn", "value": round(_avg([log.retrieval_latency for log in inference_logs]), 3)},
+            {"label": "Sinh văn bản", "value": round(_avg([log.generation_latency for log in inference_logs]), 3)},
         ],
         "backend_distribution": _counter_to_points(
             Counter(log.generation_backend or "unknown" for log in inference_logs),
@@ -149,7 +149,7 @@ def get_admin_analytics(db: Session) -> dict[str, Any]:
             {
                 "label": user_lookup.get(user_id, user_id),
                 "value": count,
-                "secondary": "actions",
+                "secondary": "hành động",
             }
             for user_id, count in Counter(str(activity.user_id) for activity in activities).most_common(8)
         ],
