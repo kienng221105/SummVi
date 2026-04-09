@@ -1,5 +1,12 @@
-const API_BASE_URL = "/api";
-const LEGACY_API_BASE_URL = "/api/v1";
+function normalizeBaseUrl(value, fallback) {
+  return (value || fallback).replace(/\/$/, "");
+}
+
+const API_BASE_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL, "/api");
+const LEGACY_API_BASE_URL = normalizeBaseUrl(
+  process.env.NEXT_PUBLIC_LEGACY_API_BASE_URL,
+  `${API_BASE_URL}/v1`,
+);
 
 function buildHeaders(token, isJson = true) {
   const headers = {};
@@ -14,7 +21,15 @@ function buildHeaders(token, isJson = true) {
 
 async function parseResponse(response) {
   const rawText = await response.text();
-  const payload = rawText ? JSON.parse(rawText) : null;
+  let payload = null;
+
+  if (rawText) {
+    try {
+      payload = JSON.parse(rawText);
+    } catch (_error) {
+      payload = { detail: rawText };
+    }
+  }
 
   if (!response.ok) {
     const message =
@@ -34,14 +49,21 @@ async function parseResponse(response) {
 async function request(path, options = {}) {
   const { method = "GET", token, body, useLegacyBase = false, isJson = true } = options;
   const baseUrl = useLegacyBase ? LEGACY_API_BASE_URL : API_BASE_URL;
-  const response = await fetch(`${baseUrl}${path}`, {
-    method,
-    headers: buildHeaders(token, isJson),
-    body: body === undefined ? undefined : isJson ? JSON.stringify(body) : body,
-    cache: "no-store",
-  });
+  try {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers: buildHeaders(token, isJson),
+      body: body === undefined ? undefined : isJson ? JSON.stringify(body) : body,
+      cache: "no-store",
+    });
 
-  return parseResponse(response);
+    return parseResponse(response);
+  } catch (error) {
+    if (typeof error?.status === "number") {
+      throw error;
+    }
+    throw new Error("Backend chưa sẵn sàng hoặc không thể kết nối. Hãy khởi động backend trước.");
+  }
 }
 
 export function getApiBaseUrl() {

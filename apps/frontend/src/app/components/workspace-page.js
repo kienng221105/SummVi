@@ -9,6 +9,7 @@ import {
   getConversationMessages,
   getConversationRating,
   listConversations,
+  summarizeLegacy,
   summarizeText,
   upsertRating,
 } from "../lib/api";
@@ -203,11 +204,6 @@ export default function WorkspacePage() {
   }
 
   async function handleSummarize() {
-    if (!session?.token) {
-      setError("Can dang nhap truoc khi tao tom tat.");
-      return;
-    }
-
     const inputText = activeTab === "text" ? text : urlText;
     if (!inputText.trim()) {
       setError("Cần nhập nội dung văn bản hoặc đường dẫn.");
@@ -219,15 +215,34 @@ export default function WorkspacePage() {
     setError("");
 
     try {
-      const response = await summarizeText(session.token, {
+      const requestPayload = {
         text: inputText,
         summary_length: summaryLength,
         output_format: outputFormat,
         conversation_title: conversationTitle || undefined,
-      });
-      setLatestResult(response);
-      await loadConversations(session.token, response.conversation_id);
+      };
+
+      let response;
+      if (session?.token) {
+        try {
+          response = await summarizeText(session.token, requestPayload);
+        } catch (requestError) {
+          if (requestError?.status === 401) {
+            response = await summarizeLegacy(requestPayload);
+          } else {
+            throw requestError;
+          }
+        }
+      } else {
+        response = await summarizeLegacy(requestPayload);
+      }
+
+      if (session?.token && response?.conversation_id) {
+        await loadConversations(session.token, response.conversation_id);
+      }
+
       setToast("Đã tạo bản tóm tắt mới.");
+      setLatestResult(response);
     } catch (requestError) {
       setError(requestError.message || "Không thể tạo bản tóm tắt.");
     } finally {
