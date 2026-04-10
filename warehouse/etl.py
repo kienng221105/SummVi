@@ -19,9 +19,7 @@ def _build_database_uri() -> str:
             f"{os.getenv('POSTGRES_DB', 'summarization')}"
         )
 
-    sqlite_path = Path(os.getenv("SQLITE_PATH", "./data/summarization.db")).resolve()
-    sqlite_path.parent.mkdir(parents=True, exist_ok=True)
-    return f"sqlite:///{sqlite_path.as_posix()}"
+    raise RuntimeError("No PostgreSQL configuration found (DATABASE_URL or POSTGRES_HOST). ETL depends on PostgreSQL.")
 
 
 def export_inference_logs(output_dir: str = "./warehouse/exports") -> dict:

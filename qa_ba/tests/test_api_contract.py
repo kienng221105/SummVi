@@ -3,8 +3,11 @@ import sys
 import unittest
 from pathlib import Path
 
-os.environ.setdefault("SQLITE_PATH", "./data/test_summarization.db")
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
+# Ensure we use a test database or mock correctly
+os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/summarization_test")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "apps" / "backend"))
 
 from app.schemas.summarize import SummarizeRequest, SummarizeResponse
 from app.api.routes import summarize as summarize_route

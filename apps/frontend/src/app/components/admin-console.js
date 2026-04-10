@@ -123,6 +123,7 @@ function DonutChart({ points = [] }) {
   if (points.length === 0) return null;
   const colors = ["#a78bfa", "#60a5fa", "#34d399", "#fb923c", "#f87171", "#94a3b8"];
   const total = points.reduce((acc, p) => acc + (Number(p.value) || 0), 0);
+  const displayTotal = Number.isInteger(total) ? total : total.toFixed(3);
   let currentAngle = 0;
 
   return (
@@ -131,7 +132,7 @@ function DonutChart({ points = [] }) {
         <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="var(--bg-panel)" strokeWidth="5" />
         {points.map((p, i) => {
           const val = (Number(p.value) || 0);
-          const percent = (val / total) * 100;
+          const percent = total > 0 ? (val / total) * 100 : 0;
           const offset = 100 - currentAngle + 25;
           currentAngle += percent;
           return (
@@ -147,8 +148,8 @@ function DonutChart({ points = [] }) {
           );
         })}
         <g className="donut-text">
-          <text x="50%" y="50%" className="donut-number">{total}</text>
-          <text x="50%" y="50%" className="donut-label">Total</text>
+          <text x="21" y="21" dy="-1" className="donut-number">{displayTotal}</text>
+          <text x="21" y="21" dy="4" className="donut-label">Total</text>
         </g>
       </svg>
       <div className="donut-legend">

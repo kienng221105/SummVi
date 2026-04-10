@@ -3,7 +3,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ROOT_DIR = Path(__file__).resolve().parents[4]
+def get_root_dir():
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "ml").exists() or (parent / "apps").exists():
+            return parent
+    return current.parents[2] # Fallback for local dev
+
+ROOT_DIR = get_root_dir()
 
 
 @dataclass(frozen=True)
@@ -18,11 +25,6 @@ class Settings:
     default_admin_email: str = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@summvi.local")
     default_admin_password: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "")
     postgres_host: str = os.getenv("POSTGRES_HOST", "localhost")
-    postgres_port: int = int(os.getenv("POSTGRES_PORT", "5432"))
-    postgres_db: str = os.getenv("POSTGRES_DB", "summarization")
-    postgres_user: str = os.getenv("POSTGRES_USER", "postgres")
-    postgres_password: str = os.getenv("POSTGRES_PASSWORD", "postgres")
-    sqlite_path: str = os.getenv("SQLITE_PATH", str(ROOT_DIR / "data" / "summarization.db"))
     chroma_persist_dir: str = os.getenv("CHROMA_PERSIST_DIR", str(ROOT_DIR / "chroma_data"))
     chroma_http_host: str | None = os.getenv("CHROMA_HTTP_HOST") or None
     chroma_http_port: int = int(os.getenv("CHROMA_HTTP_PORT", "8000"))
@@ -45,24 +47,12 @@ class Settings:
     chunk_overlap: int = int(os.getenv("RAG_CHUNK_OVERLAP", "32"))
 
     @property
-    def sqlite_database_uri(self) -> str:
-        sqlite_path = Path(self.sqlite_path).resolve()
-        sqlite_path.parent.mkdir(parents=True, exist_ok=True)
-        return f"sqlite:///{sqlite_path.as_posix()}"
-
-    @property
     def sqlalchemy_database_uri(self) -> str:
         database_url = os.getenv("DATABASE_URL")
         if database_url:
             return database_url
 
-        if os.getenv("POSTGRES_HOST"):
-            return (
-                f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
-                f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-            )
-
-        return self.sqlite_database_uri
+        return self.postgres_database_uri
 
     @property
     def prefers_postgres(self) -> bool:

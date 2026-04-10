@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 
 from ml.utils.text_utils import clean_text, split_sentences
@@ -103,8 +105,26 @@ def format_fallback_summary(summary: str, output_format: str = "paragraph") -> s
         return ""
 
     if normalized_format in {"bullet", "keypoints"}:
-        sentences = split_sentences(normalized_summary) or [normalized_summary]
-        bullets = [f"- {sentence}" for sentence in sentences[:8]]
-        return "\n".join(bullets)
+        # Split into sentences and cleanup each one
+        raw_sentences = split_sentences(normalized_summary) or [normalized_summary]
+        formatted_bullets = []
+        
+        for sentence in raw_sentences[:8]:
+            # Strip leading hyphens or bullets that might come from the model
+            clean_s = re.sub(r"^[\s\-\*\u2022]+", "", sentence).strip()
+            if not clean_s:
+                continue
+            # Capitalize first letter
+            if len(clean_s) > 1:
+                clean_s = clean_s[0].upper() + clean_s[1:]
+            elif len(clean_s) == 1:
+                clean_s = clean_s.upper()
 
-    return normalized_summary
+            formatted_bullets.append(f"- {clean_s}")
+            
+        return "\n".join(formatted_bullets)
+
+    # For paragraphs, also try to capitalize the first letter
+    if len(normalized_summary) > 1:
+        return normalized_summary[0].upper() + normalized_summary[1:]
+    return normalized_summary.upper()

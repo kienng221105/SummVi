@@ -13,11 +13,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - summvi-network
+    ports:
+      - "5432:5432"
 
   backend:
     build:
-      context: ./apps/backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/backend/Dockerfile
     container_name: summvi-backend
     restart: always
     depends_on:
@@ -28,10 +30,17 @@ services:
       - LITE_MODE=true
     volumes:
       - ./data:/app/data
+      - ./chroma_data:/app/chroma_data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - summvi-network
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
 
   frontend:
     build:
@@ -40,9 +49,11 @@ services:
     container_name: summvi-frontend
     restart: always
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://your-domain-or-ip:8000
+      - NEXT_PUBLIC_API_BASE_URL=/api
+      - INTERNAL_BACKEND_URL=http://backend:8000
     networks:
       - summvi-network
     ports:

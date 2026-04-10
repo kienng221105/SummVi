@@ -6,7 +6,15 @@ import sys
 from pathlib import Path
 
 # Add project root to sys.path to allow importing 'ml' module
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+def get_project_root():
+    current = Path(__file__).resolve()
+    # Search upwards for 'ml' directory or project marker
+    for parent in current.parents:
+        if (parent / "ml").exists() or (parent / "apps").exists():
+            return parent
+    return current.parents[1] # Fallback to a sensible default
+
+PROJECT_ROOT = get_project_root()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 

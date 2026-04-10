@@ -46,28 +46,16 @@ class GUID(TypeDecorator):
 
 def _create_engine():
     database_uri = settings.sqlalchemy_database_uri
-    connect_args = {"check_same_thread": False} if database_uri.startswith("sqlite") else {}
-    pool_pre_ping = not database_uri.startswith("sqlite")
-
+    
     try:
-        return create_engine(database_uri, pool_pre_ping=pool_pre_ping, connect_args=connect_args)
-    except ModuleNotFoundError as exc:
-        if not settings.prefers_postgres:
-            raise
-
-        warnings.warn(
-            (
-                "PostgreSQL driver is unavailable. "
-                f"Falling back to SQLite at {settings.sqlite_database_uri}."
-            ),
-            RuntimeWarning,
-            stacklevel=2,
-        )
-        return create_engine(
-            settings.sqlite_database_uri,
-            pool_pre_ping=False,
-            connect_args={"check_same_thread": False},
-        )
+        # PostgreSQL connections should always use pool_pre_ping for production stability
+        return create_engine(database_uri, pool_pre_ping=True)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to connect to PostgreSQL at {database_uri}. "
+            "Ensure the database is running and credentials are correct. "
+            f"Error: {exc}"
+        ) from exc
 
 
 engine = _create_engine()

@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies
-COPY requirements.txt .
+COPY apps/backend/requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # Final stage
@@ -21,13 +21,15 @@ WORKDIR /app
 # Copy system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed python packages
 COPY --from=builder /install /usr/local
 
-# Copy application code
-COPY . .
+# Copy application code and ML module
+COPY apps/backend .
+COPY ml ./ml
 
 # Set environment variables
 ENV PYTHONPATH=/app

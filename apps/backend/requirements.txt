@@ -13,3 +13,4 @@ pytest
 python-multipart
 pymupdf
 python-docx
+gunicorn
