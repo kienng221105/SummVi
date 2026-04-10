@@ -1744,6 +1744,8 @@ textarea {
   background: rgba(var(--accent-primary-rgb), 0.03);
   padding: 20px 24px;
   border-bottom: 1px solid var(--border-light);
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .exchange-prompt label {
@@ -1754,6 +1756,11 @@ textarea {
   color: var(--accent-primary);
   font-weight: 700;
   margin-bottom: 8px;
+  position: sticky;
+  top: -20px;
+  background: inherit;
+  padding: 4px 0;
+  z-index: 1;
 }
 
 .exchange-prompt p {
@@ -1761,6 +1768,9 @@ textarea {
   font-size: 15px;
   line-height: 1.6;
   color: var(--text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .exchange-result {
