@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { getCurrentUser, loginUser, registerUser } from "../lib/api";
 import { useSessionGuard } from "../lib/session-guard";
@@ -14,16 +14,10 @@ export default function AuthPage({ mode, title, subtitle }) {
   const isLogin = mode === "login";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  const fullName = useMemo(
-    () => `${firstName.trim()} ${lastName.trim()}`.trim(),
-    [firstName, lastName],
-  );
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -33,6 +27,10 @@ export default function AuthPage({ mode, title, subtitle }) {
     try {
       if (!isLogin && !acceptedTerms) {
         throw new Error("Cần đồng ý với điều khoản trước khi tạo tài khoản.");
+      }
+
+      if (!isLogin && password !== confirmPassword) {
+        throw new Error("Mật khẩu xác nhận không khớp.");
       }
 
       if (isLogin) {
@@ -48,7 +46,7 @@ export default function AuthPage({ mode, title, subtitle }) {
 
       await registerUser({ email, password });
       const token = await loginUser({ email, password });
-      const baseSession = createSession(token.access_token, email || fullName);
+      const baseSession = createSession(token.access_token, email);
       const currentUser = await getCurrentUser(baseSession.token);
       const refreshedSession = mergeSessionWithUser(baseSession, currentUser);
       saveSession(refreshedSession);
@@ -113,31 +111,6 @@ export default function AuthPage({ mode, title, subtitle }) {
           </div>
 
           <form className="auth-form" onSubmit={handleSubmit}>
-            {!isLogin ? (
-              <div className="input-row">
-                <div className="input-group">
-                  <label htmlFor="first-name">Họ</label>
-                  <input
-                    id="first-name"
-                    onChange={(event) => setFirstName(event.target.value)}
-                    placeholder="Nguyễn"
-                    type="text"
-                    value={firstName}
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="last-name">Tên</label>
-                  <input
-                    id="last-name"
-                    onChange={(event) => setLastName(event.target.value)}
-                    placeholder="Kiên"
-                    type="text"
-                    value={lastName}
-                  />
-                </div>
-              </div>
-            ) : null}
-
             <div className="input-group">
               <label htmlFor="email">Email</label>
               <div className="input-wrapper">
@@ -168,6 +141,24 @@ export default function AuthPage({ mode, title, subtitle }) {
                 />
               </div>
             </div>
+
+            {!isLogin ? (
+              <div className="input-group">
+                <label htmlFor="confirm-password">Xác nhận mật khẩu</label>
+                <div className="input-wrapper">
+                  <span className="input-prefix">*</span>
+                  <input
+                    id="confirm-password"
+                    minLength={8}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="Nhập lại mật khẩu"
+                    required
+                    type="password"
+                    value={confirmPassword}
+                  />
+                </div>
+              </div>
+            ) : null}
 
             {isLogin ? (
               <div className="form-options">
