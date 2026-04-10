@@ -23,7 +23,7 @@ class Settings:
     secret_key: str = os.getenv("SECRET_KEY", "")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
     default_admin_email: str = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@summvi.local")
-    default_admin_password: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "")
+    default_admin_password: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "Admin@123")
     postgres_host: str = os.getenv("POSTGRES_HOST", "localhost")
     chroma_persist_dir: str = os.getenv("CHROMA_PERSIST_DIR", str(ROOT_DIR / "chroma_data"))
     chroma_http_host: str | None = os.getenv("CHROMA_HTTP_HOST") or None
