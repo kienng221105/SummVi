@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from app.core.timezone import get_now
 from pathlib import Path
 
 import pandas as pd
@@ -68,7 +68,7 @@ class RetrainPipeline:
         logs = self._load_logs()
 
         training_dataset = self._filter_training_dataset(processed_dataset)
-        model_version = f"vit5-retrain-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        model_version = f"vit5-retrain-{get_now().strftime('%Y%m%d%H%M%S')}"
         target = self.output_dir / model_version
         target.mkdir(parents=True, exist_ok=True)
 
@@ -81,7 +81,7 @@ class RetrainPipeline:
 
         retrain_report = {
             "model_version": model_version,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": get_now().isoformat(),
             "training_rows": int(len(training_dataset)),
             "feature_rows": int(len(feature_store)),
             "log_rows": int(len(logs)),

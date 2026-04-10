@@ -383,7 +383,10 @@ code {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 40px;
+  padding: 16px 40px;
+  min-height: 80px;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .breadcrumb,
@@ -1419,6 +1422,43 @@ textarea {
   border-radius: 50%;
 }
 
+/* == ADMIN TOP NAV STYLES == */
+.admin-top-nav {
+  display: flex;
+  gap: 8px;
+  background: rgba(241, 245, 249, 0.5);
+  padding: 4px;
+  border-radius: var(--radius-lg);
+  margin: 0 16px;
+}
+
+.top-nav-item {
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.top-nav-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
+}
+
+.top-nav-item.active {
+  background: white;
+  color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-sidebar {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
 /* == DOCUMENT UPLOAD STYLES == */
 .upload-zone {
   position: relative;
@@ -2366,6 +2406,7 @@ textarea {
     min-width: 120px;
   }
 }
+
 /* == ADVANCED ADMIN ANALYTICS STYLES == */
 
 .title-with-icon {

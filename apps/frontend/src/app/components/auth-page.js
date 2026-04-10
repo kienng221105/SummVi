@@ -107,8 +107,8 @@ export default function AuthPage({ mode, title, subtitle }) {
             <h2>{isLogin ? "Chào mừng trở lại" : "Tạo tài khoản mới"}</h2>
             <p>
               {isLogin
-                ? "Đăng nhập để tiếp tục công việc tóm tắt và quan sát log hệ thống."
-                : "Đăng ký để lưu lịch sử hội thoại, đánh giá kết quả và vào dashboard."}
+                ? "Đăng nhập để tiếp tục công việc tóm tắt."
+                : "Đăng ký để trải nghiệm dịch vụ tóm tắt thông minh."}
             </p>
           </div>
 
@@ -175,7 +175,7 @@ export default function AuthPage({ mode, title, subtitle }) {
                   <input type="checkbox" />
                   <span>Ghi nhớ tôi</span>
                 </label>
-                <span className="forgot-pw">Swagger + JWT</span>
+                <span className="forgot-pw">Bảo mật hệ thống</span>
               </div>
             ) : (
               <div className="form-options">

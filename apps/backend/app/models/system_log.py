@@ -1,9 +1,9 @@
-from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, Integer, String, Text
 
 from app.core.database import Base, GUID
+from app.core.timezone import get_now
 
 
 class SystemLog(Base):
@@ -23,4 +23,4 @@ class SystemLog(Base):
     error_type = Column(String(255), nullable=True)
     error_message = Column(Text, nullable=True)
     details = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=get_now, nullable=False)

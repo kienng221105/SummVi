@@ -391,25 +391,17 @@ export default function AdminConsole() {
   return (
     <div className="app-container">
       <aside className="sidebar admin-sidebar">
-        <div className="logo-area">
+        <div
+          className="logo-area"
+          onClick={() => router.push("/")}
+          style={{ cursor: "pointer" }}
+        >
           <div className="logo-icon admin-icon">AD</div>
           <h2>
             SummVi <span className="badge">Admin</span>
           </h2>
         </div>
 
-        <div className="admin-nav">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              className={`nav-item ${activeSection === item.id ? "active" : ""}`}
-              onClick={() => setActiveSection(item.id)}
-              type="button"
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
 
         <div className="user-profile admin-profile">
           <div className="avatar">{session.email.slice(0, 2).toUpperCase()}</div>
@@ -427,6 +419,18 @@ export default function AdminConsole() {
         <header className="topbar">
           <div className="breadcrumb">
             <h2>{sectionTitle}</h2>
+          </div>
+          <div className="admin-top-nav">
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                className={`top-nav-item ${activeSection === item.id ? "active" : ""}`}
+                onClick={() => setActiveSection(item.id)}
+                type="button"
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
           <div className="topbar-actions">
             <button className="btn-outline" onClick={() => loadAdminData(session.token)} type="button">

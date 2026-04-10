@@ -62,6 +62,9 @@ engine = _create_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
 
 
+from app.core.timezone import get_now
+
+
 class InferenceLog(Base):
     __tablename__ = "inference_logs"
 
@@ -96,7 +99,7 @@ class InferenceLog(Base):
     platform_name = Column(String(128), nullable=True)
     cuda_available = Column(BOOLEAN, nullable=True)
     gpu_memory_mb = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=get_now, nullable=False)
 
 
 def init_db() -> None:

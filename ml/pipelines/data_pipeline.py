@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from app.core.timezone import get_now
 from pathlib import Path
 
 import pandas as pd
@@ -28,7 +28,7 @@ class DataPipeline:
         if has_raw_files:
             return
 
-        bootstrap_dir = self.raw_dir / str(datetime.utcnow().year)
+        bootstrap_dir = self.raw_dir / str(get_now().year)
         bootstrap_dir.mkdir(parents=True, exist_ok=True)
         bootstrap_path = bootstrap_dir / "bootstrap_summarization_samples.jsonl"
         samples = [
@@ -117,7 +117,7 @@ class DataPipeline:
                     "text_word_count": len(text.split()),
                     "summary_word_count": len(summary.split()),
                     "sentence_count": len(split_sentences(text)),
-                    "processed_at": datetime.utcnow().isoformat(),
+                    "processed_at": get_now().isoformat(),
                 }
             )
 
@@ -156,7 +156,7 @@ class DataPipeline:
             "feature_rows": int(len(feature_df)),
             "processed_path": str(processed_path.resolve()),
             "feature_store_path": str(feature_path.resolve()),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": get_now().isoformat(),
         }
         manifest_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         return report

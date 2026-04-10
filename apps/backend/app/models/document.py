@@ -1,10 +1,10 @@
-from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base, GUID
+from app.core.timezone import get_now
 
 
 class Document(Base):
@@ -18,6 +18,6 @@ class Document(Base):
     vector_collection_id = Column(String(255), nullable=True)
     chunk_count = Column(Integer, default=0, nullable=False)
     embedding_model = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=get_now, nullable=False)
 
     conversation = relationship("Conversation", back_populates="documents")

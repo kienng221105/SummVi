@@ -225,6 +225,9 @@ def _average_series(items: list[Any], date_getter, value_getter, days: int = 7) 
     ]
 
 
+from app.core.timezone import get_now
+
+
 def _date_slots(days: int) -> list[Any]:
-    today = datetime.utcnow().date()
+    today = get_now().date()
     return [today - timedelta(days=offset) for offset in reversed(range(days))]

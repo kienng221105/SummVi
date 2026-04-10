@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.database import InferenceLog
+from app.core.timezone import get_now
 
 
 class LoggingPipeline:
@@ -58,7 +59,7 @@ class LoggingPipeline:
                 platform_name=platform.platform(),
                 cuda_available=diagnostics.get("cuda_available"),
                 gpu_memory_mb=diagnostics.get("gpu_memory_mb"),
-                created_at=datetime.utcnow(),
+                created_at=get_now(),
             )
             session.add(log)
             session.commit()

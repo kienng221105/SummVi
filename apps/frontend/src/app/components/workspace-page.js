@@ -18,7 +18,7 @@ import { clearStoredSession } from "../lib/session";
 import { useSessionGuard } from "../lib/session-guard";
 
 const QUICK_START_TEXT =
-  "Nhập một đoạn văn tiếng Việt để hệ thống ViT5 + RAG phân tích, tạo tóm tắt và ghi nhận log vận hành.";
+  "Nhập một đoạn văn tiếng Việt để tạo tóm tắt.";
 
 const LENGTH_OPTIONS = [
   { label: "Ngắn", value: "short" },
@@ -249,7 +249,7 @@ export default function WorkspacePage() {
                   <p>{pair.user.content}</p>
                 </div>
                 <div className="exchange-result">
-                  <label>Bản tóm tắt ViT5</label>
+                  <label>Bản tóm tắt thông minh</label>
                   {pair.assistant ? (
                     <>
                       {renderFormattedContent(pair.assistant.content)}
@@ -560,7 +560,14 @@ export default function WorkspacePage() {
           onClick={() => setIsSidebarOpen(false)}
         />
         <aside className="sidebar">
-          <div className="logo-area">
+          <div
+            className="logo-area"
+            onClick={() => {
+              setActiveView("composer");
+              handleResetComposer();
+            }}
+            style={{ cursor: "pointer" }}
+          >
             <div className="logo-icon">SV</div>
             <h2>SummVi</h2>
           </div>
@@ -583,7 +590,7 @@ export default function WorkspacePage() {
                 className={`history-item ${activeView === "composer" ? "active" : ""}`}
                 onClick={() => setActiveView("composer")}
               >
-                <span>Dòng thời gian ảo</span>
+                <span>Trang chủ</span>
               </li>
               <li
                 className={`history-item ${activeView === "history" ? "active" : ""}`}
@@ -640,8 +647,8 @@ export default function WorkspacePage() {
                     Sức mạnh AI, <span className="text-gradient">tóm gọn</span> mọi văn bản.
                   </h1>
                   <p>
-                    Nhập văn bản, đường dẫn hoặc mở panel tài liệu để thao tác theo giao diện mẫu. Sử
-                    dụng thực tế hiện tại đang nối đến FastAPI summarization workflow.
+                    Nhập văn bản, đường dẫn hoặc mở bảng tài liệu để thực hiện tóm tắt. Hệ thống đang
+                    sẵn sàng xử lý và cung cấp thông tin hữu ích cho bạn.
                   </p>
                 </div>
 
