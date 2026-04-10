@@ -1,5 +1,9 @@
-.git
-.next
 node_modules
-*.log
-.npm-cache
+.next
+out
+build
+.env*.local
+.git
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

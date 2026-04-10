@@ -1,19 +1,41 @@
+# Production Dockerfile for SummVi Backend
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Install system dependencies for document processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Final stage
 FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY apps/backend/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Copy system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY apps/backend /app/apps/backend
-COPY configs /app/configs
-COPY data /app/data
-COPY ml /app/ml
-COPY warehouse /app/warehouse
+# Copy installed python packages
+COPY --from=builder /install /usr/local
 
-ENV PYTHONPATH=/app/apps/backend:/app
-ENV CHROMA_PERSIST_DIR=/app/chroma_data
-ENV HF_HOME=/app/data/models/cache
+# Copy application code
+COPY . .
 
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV LITE_MODE=true
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8000
+ENV WEB_CONCURRENCY=1
+
+# Run with Gunicorn for production
+# Respects Render's dynamic PORT and allows scaling workers via WEB_CONCURRENCY
+CMD ["sh", "-c", "gunicorn -w ${WEB_CONCURRENCY:-1} -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:${PORT:-8000}"]
