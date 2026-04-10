@@ -32,10 +32,12 @@ function formatDate(value) {
   if (!value) {
     return "--";
   }
+  const normalized = typeof value === "string" && !value.endsWith("Z") && !value.includes("+") ? value + "Z" : value;
   return new Intl.DateTimeFormat("vi-VN", {
     dateStyle: "short",
     timeStyle: "short",
-  }).format(new Date(value));
+    timeZone: "Asia/Ho_Chi_Minh",
+  }).format(new Date(normalized));
 }
 
 function getInitials(email) {
