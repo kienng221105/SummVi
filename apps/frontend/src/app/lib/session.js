@@ -18,7 +18,8 @@ function decodeToken(token) {
   if (!token) {
     return null;
   }
-  const [, payload] = token.split(".");
+  const parts = token.split(".");
+  const payload = parts.length >= 3 ? parts[1] : parts[0];
   return decodeJwtSegment(payload);
 }
 

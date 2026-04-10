@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   TrendingUp,
   Users,
+  X,
 } from "lucide-react";
 
 import {
@@ -168,10 +169,249 @@ function DonutChart({ points = [] }) {
   );
 }
 
-function ChartCard({ title, subtitle, points = [], type = "area", accent = "#a78bfa", icon: Icon }) {
+function DetailedDonutChart({ points = [] }) {
+  if (points.length === 0) return null;
+  const colors = ["#a78bfa", "#60a5fa", "#34d399", "#fb923c", "#f87171", "#94a3b8", "#f472b6", "#c084fc"];
+  const total = points.reduce((acc, p) => acc + (Number(p.value) || 0), 0);
+  const displayTotal = Number.isInteger(total) ? total : total.toFixed(2);
+  let currentAngle = 0;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "60px", padding: "20px 0" }}>
+      <svg width="240" height="240" viewBox="0 0 42 42" style={{ transform: "rotate(-90deg)", filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.1))" }}>
+        <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f1f5f9" strokeWidth="6" />
+        {points.map((p, i) => {
+          const val = (Number(p.value) || 0);
+          const percent = total > 0 ? (val / total) * 100 : 0;
+          const offset = 100 - currentAngle + 25;
+          currentAngle += percent;
+          return (
+            <circle
+              key={p.label}
+              cx="21" cy="21" r="15.915"
+              fill="transparent"
+              stroke={colors[i % colors.length]}
+              strokeWidth="6"
+              strokeDasharray={`${percent} ${100 - percent}`}
+              strokeDashoffset={offset}
+              style={{ cursor: "pointer", transition: "stroke-width 0.2s" }}
+            >
+              <title>{`${p.label}: ${val}`}</title>
+            </circle>
+          );
+        })}
+        <g style={{ transform: "rotate(90deg)", transformOrigin: "center" }}>
+          <text x="21" y="21" dy="0" fill="#1f2937" fontSize="0.4rem" fontWeight="bold" textAnchor="middle">{displayTotal.toLocaleString("vi-VN")}</text>
+          <text x="21" y="21" dy="5" fill="#6b7280" fontSize="0.25rem" textAnchor="middle">Tổng</text>
+        </g>
+      </svg>
+      <div style={{ display: "flex", flexDirection: "column", gap: "14px", maxHeight: "240px", overflowY: "auto", paddingRight: "10px" }}>
+        {points.map((p, i) => (
+          <div key={p.label} style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "15px" }}>
+            <span style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: colors[i % colors.length] }} />
+            <span style={{ color: "#4b5563", flex: 1, minWidth: "120px" }}>{p.label}</span>
+            <strong style={{ color: "#111827" }}>{p.value}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BarChart({ points = [], color = "#3b82f6" }) {
+  if (points.length === 0) return <p className="empty-state">Chưa đủ dữ liệu.</p>;
+  const values = points.map(p => Number(p.value) || 0);
+  const maxValue = Math.max(...values, 10);
+  const width = 100;
+  const height = 40;
+  const barWidth = width / values.length - 2;
+
+  return (
+    <div className="svg-chart-container">
+      <svg width="100%" height="120px" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+        {values.map((v, i) => {
+          const x = i * (width / values.length) + 1;
+          const h = (v / maxValue) * height;
+          const y = height - h;
+          return (
+            <rect key={i} x={x} y={y} width={barWidth > 0 ? barWidth : 1} height={h} fill={color} opacity="0.8" rx="0.5" />
+          );
+        })}
+      </svg>
+      <div className="chart-x-axis">
+        {points.map((p, i) => (<span key={p.label}>{p.label}</span>))}
+      </div>
+    </div>
+  );
+}
+
+function DetailedComboChart({ points = [], color = "#3b82f6" }) {
+  if (points.length === 0) return null;
+  const values = points.map((p) => Number(p.value) || 0);
+  const maxVal = Math.max(...values, 10);
+  const width = 800;
+  const height = 300;
+  const paddingX = 60;
+  const paddingY = 40;
+  const graphWidth = width - paddingX * 2;
+  const graphHeight = height - paddingY * 2;
+  const barWidth = graphWidth / values.length - 10;
+
+  // Generate line points
+  const getPoint = (i, v) => {
+    const x = paddingX + i * (graphWidth / values.length) + 5 + (barWidth > 0 ? barWidth : 10) / 2;
+    const y = paddingY + graphHeight - (v / maxVal) * graphHeight;
+    return { x, y };
+  };
+
+  const polyPoints = points.map((p, i) => {
+    const pt = getPoint(i, Number(p.value) || 0);
+    return `${pt.x},${pt.y}`;
+  }).join(" ");
+
+  return (
+    <div style={{ width: "100%", overflowX: "auto" }}>
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ minWidth: "600px" }}>
+        {/* Grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+          const y = paddingY + graphHeight - graphHeight * ratio;
+          return (
+            <g key={i}>
+              <line x1={paddingX} y1={y} x2={width - paddingX} y2={y} stroke="var(--border)" strokeDasharray="4 4" opacity="0.6" />
+              <text x={paddingX - 10} y={y + 5} textAnchor="end" fill="var(--text-secondary)" fontSize="12">
+                {Math.round(maxVal * ratio).toLocaleString()}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Bars (Background layer) */}
+        {points.map((p, i) => {
+          const v = Number(p.value) || 0;
+          const h = (v / maxVal) * graphHeight;
+          const x = paddingX + i * (graphWidth / values.length) + 5;
+          const y = paddingY + graphHeight - h;
+          return (
+            <rect key={`bar-${i}`} x={x} y={y} width={barWidth > 0 ? barWidth : 10} height={h} fill={color} opacity="0.3" rx="2">
+              <title>{`${p.label}: ${v}`}</title>
+            </rect>
+          );
+        })}
+
+        {/* Line (Foreground layer) */}
+        <polyline points={polyPoints} fill="none" stroke={color} strokeWidth="3" />
+
+        {/* Dots & Labels */}
+        {points.map((p, i) => {
+          const v = Number(p.value) || 0;
+          const { x, y } = getPoint(i, v);
+          const barX = paddingX + i * (graphWidth / values.length) + 5;
+          return (
+            <g key={`dot-${i}`} className="detailed-point group">
+              <circle cx={x} cy={y} r="5" fill={color} stroke="var(--bg-panel)" strokeWidth="2" style={{ cursor: "pointer" }}>
+                <title>{`${p.label}: ${v}`}</title>
+              </circle>
+              {/* Tooltip value on hover - handled purely by CSS using .group:hover .chart-tooltip-text if we wanted, but static is fine for colab feel */}
+              {values.length < 15 && (
+                <text x={x} y={y - 12} textAnchor="middle" fill="var(--text-primary)" fontSize="12" fontWeight="bold" opacity="0.8">
+                  {v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v}
+                </text>
+              )}
+              {/* X Axis labels */}
+              <text x={x} y={paddingY + graphHeight + 20} textAnchor="middle" fill="var(--text-secondary)" fontSize="11" transform={`rotate(-25 ${x} ${paddingY + graphHeight + 20})`}>
+                {p.label.length > 12 ? p.label.substring(0, 12) + "..." : p.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function DrillDownModal({ title, data, type, accent, onClose }) {
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+    }, 200);
+  };
+
+  const validValues = (data || []).map(row => Number(row.value)).filter(v => !isNaN(v));
+  const total = validValues.reduce((sum, v) => sum + v, 0);
+  const avg = validValues.length ? Math.round(total / validValues.length) : 0;
+  const max = validValues.length ? Math.max(...validValues) : 0;
+
+  return (
+    <>
+      <div className={`modal-overlay-bg ${isClosing ? "closing" : ""}`} onClick={handleClose} />
+
+      <div className="modal-container-wrapper">
+        <div className={`modal-content ${isClosing ? "closing" : ""}`}>
+          <div className="modal-header">
+            <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#111827", margin: 0 }}>Chi tiết biểu đồ: {title}</h3>
+            <button onClick={handleClose} className="btn-icon"><X size={20} /></button>
+          </div>
+          <div className="modal-body" style={{ padding: "0 24px", overflowY: "auto" }}>
+            {type && (
+              <div style={{ marginBottom: "1rem", overflow: "visible" }}>
+                {type === "donut" ? (
+                  <DetailedDonutChart points={data} />
+                ) : (
+                  <DetailedComboChart points={data} color={accent} />
+                )}
+              </div>
+            )}
+
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: "24px",
+              borderTop: "1px solid var(--border)", paddingTop: "20px", marginBottom: "20px", alignItems: "center"
+            }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "14px", color: "var(--text-secondary)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Tổng Ghi Nhận:</span>
+                  <strong style={{ color: "var(--text-primary)", fontSize: "15px" }}>{total.toLocaleString("vi-VN")}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Số Lượng Nhãn (Items):</span>
+                  <strong style={{ color: "var(--text-primary)", fontSize: "15px" }}>{(data || []).length.toLocaleString("vi-VN")}</strong>
+                </div>
+              </div>
+              <div style={{ width: "1px", height: "80%", background: "var(--border)", opacity: 0.5 }}></div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "14px", color: "var(--text-secondary)", position: "relative", top: "2px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Mức Trung Bình:</span>
+                  <strong style={{ color: "var(--text-primary)", fontSize: "15px" }}>{avg.toLocaleString("vi-VN")}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <span>Giá Trị Kịch Trần (Max):</span>
+                  <div style={{ textAlign: "right" }}>
+                    <strong style={{ color: "var(--text-primary)", fontSize: "15px" }}>{max.toLocaleString("vi-VN")}</strong>
+                    <br />
+                    <span style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px", display: "inline-block" }}>(Đỉnh điểm)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ padding: "16px 24px", display: "flex", justifyContent: "flex-end", backgroundColor: "#f9fafb", borderBottomLeftRadius: "16px", borderBottomRightRadius: "16px", borderTop: "1px solid #e5e7eb" }}>
+            <button onClick={handleClose} className="btn-primary" style={{ padding: "8px 24px", borderRadius: "6px", fontSize: "14px", fontWeight: "600" }}>
+              Đóng
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ChartCard({ title, subtitle, points = [], type = "area", accent = "#a78bfa", icon: Icon, onClick }) {
   return (
     <div className="panel chart-card-panel">
-      <div className="panel-header">
+      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div className="title-with-icon">
           {Icon && <Icon size={18} className="text-secondary" />}
           <div>
@@ -179,12 +419,23 @@ function ChartCard({ title, subtitle, points = [], type = "area", accent = "#a78
             {subtitle ? <p className="panel-subtitle">{subtitle}</p> : null}
           </div>
         </div>
+        {onClick && (
+          <button
+            className="btn-outline"
+            onClick={onClick}
+            style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+          >
+            Chi tiết
+          </button>
+        )}
       </div>
       <div className="chart-body">
         {points.length === 0 ? (
           <p className="empty-state">Chưa có dữ liệu cho biểu đồ này.</p>
         ) : type === "donut" ? (
           <DonutChart points={points} />
+        ) : type === "bar" ? (
+          <BarChart points={points} color={accent} />
         ) : (
           <AreaChart points={points} color={accent} />
         )}
@@ -275,6 +526,7 @@ export default function AdminConsole() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState("overview");
+  const [drillDown, setDrillDown] = useState(null);
 
   useEffect(() => {
     if (booting) {
@@ -475,6 +727,7 @@ export default function AdminConsole() {
                   points={charts.request_volume}
                   subtitle="Tổng request hệ thống theo ngày"
                   title="Lưu lượng Request"
+                  onClick={() => setDrillDown({ title: "Lưu lượng Request", data: charts.request_volume, type: "area", accent: "#a78bfa" })}
                 />
                 <ChartCard
                   accent="#f87171"
@@ -482,6 +735,7 @@ export default function AdminConsole() {
                   points={charts.error_volume}
                   subtitle="Số request lỗi ghi nhận theo ngày"
                   title="Tỷ lệ Lỗi"
+                  onClick={() => setDrillDown({ title: "Tỷ lệ Lỗi", data: charts.error_volume, type: "area", accent: "#f87171" })}
                 />
                 <ChartCard
                   type="donut"
@@ -489,6 +743,7 @@ export default function AdminConsole() {
                   points={charts.endpoint_distribution}
                   subtitle="Các endpoint có lưu lượng cao"
                   title="Phân bổ Endpoint"
+                  onClick={() => setDrillDown({ title: "Phân bổ Endpoint", data: charts.endpoint_distribution, type: "donut" })}
                 />
                 <ChartCard
                   type="donut"
@@ -496,6 +751,7 @@ export default function AdminConsole() {
                   points={charts.status_distribution}
                   subtitle="Phân bổ trạng thái phản hồi HTTP"
                   title="Trạng thái Phản hồi"
+                  onClick={() => setDrillDown({ title: "Trạng thái Phản hồi", data: charts.status_distribution, type: "donut" })}
                 />
               </div>
 
@@ -516,6 +772,7 @@ export default function AdminConsole() {
                   points={charts.user_growth}
                   subtitle="Người dùng mới tham gia theo ngày"
                   title="Tăng trưởng Người dùng"
+                  onClick={() => setDrillDown({ title: "Chi tiết Tăng trưởng", data: charts.user_growth })}
                 />
                 <ChartCard
                   type="donut"
@@ -523,8 +780,21 @@ export default function AdminConsole() {
                   points={tables.activity_leaders?.map((row) => ({ label: row.label, value: row.value })) || []}
                   subtitle="Người dùng có nhiều hành động nhất"
                   title="Người dùng Tích cực"
+                  onClick={() => setDrillDown({ title: "Top User Hoạt động", data: tables.activity_leaders })}
                 />
               </div>
+
+              <InsightTable
+                icon={TrendingUp}
+                columns={[
+                  { key: "label", label: "Khoảng thời gian" },
+                  { key: "value", label: "Tỷ lệ giữ chân (%)", render: (value) => <strong>{value}%</strong> },
+                  { key: "tertiary", label: "Số lượng User" },
+                ]}
+                rows={tables.retention || []}
+                subtitle="Phân tích mức độ quay lại của người dùng"
+                title="Tỷ lệ Giữ chân (Retention)"
+              />
 
               <InsightTable
                 icon={ShieldCheck}
@@ -579,9 +849,10 @@ export default function AdminConsole() {
                 <ChartCard
                   accent="#a78bfa"
                   icon={Activity}
-                  points={charts.request_volume}
-                  subtitle="Xu hướng request trong 7 ngày gần nhất"
+                  points={charts.hourly_volume || charts.request_volume}
+                  subtitle={charts.hourly_volume ? "Lưu lượng tính theo khung giờ gần nhất" : "Xu hướng request trong 7 ngày gần nhất"}
                   title="Xu hướng Request"
+                  onClick={() => setDrillDown({ title: "Chi tiết Lưu lượng Request", data: charts.hourly_volume || charts.request_volume, type: "area", accent: "#a78bfa" })}
                 />
                 <ChartCard
                   accent="#f59e0b"
@@ -589,6 +860,7 @@ export default function AdminConsole() {
                   points={charts.latency_trend}
                   subtitle="Độ trễ trung bình của hệ thống theo ngày"
                   title="Xu hướng Độ trễ"
+                  onClick={() => setDrillDown({ title: "Chi tiết Độ trễ", data: charts.latency_trend, type: "area", accent: "#f59e0b" })}
                 />
                 <ChartCard
                   type="donut"
@@ -596,6 +868,7 @@ export default function AdminConsole() {
                   points={charts.endpoint_distribution}
                   subtitle="Các endpoint được gọi nhiều nhất"
                   title="Lưu lượng Endpoint"
+                  onClick={() => setDrillDown({ title: "Phân bổ Endpoint", data: charts.endpoint_distribution, type: "donut" })}
                 />
                 <ChartCard
                   type="donut"
@@ -603,6 +876,7 @@ export default function AdminConsole() {
                   points={tables.top_endpoints?.map((row) => ({ label: row.label, value: row.value })) || []}
                   subtitle="Thống kê tải theo từng endpoint"
                   title="Top Endpoints"
+                  onClick={() => setDrillDown({ title: "Top Endpoints", data: tables.top_endpoints, type: "donut" })}
                 />
               </div>
 
@@ -654,6 +928,7 @@ export default function AdminConsole() {
                   points={charts.inference_volume}
                   subtitle="Số lượt model thực hiện tóm tắt theo ngày"
                   title="Lưu lượng Inference"
+                  onClick={() => setDrillDown({ title: "Lưu lượng Inference", data: charts.inference_volume, type: "area", accent: "#a78bfa" })}
                 />
                 <ChartCard
                   accent="#10b981"
@@ -661,6 +936,7 @@ export default function AdminConsole() {
                   points={charts.compression_trend}
                   subtitle="Tỷ lệ nén văn bản trung bình ghi nhận"
                   title="Xu hướng Nén văn bản"
+                  onClick={() => setDrillDown({ title: "Xu hướng Nén văn bản", data: charts.compression_trend, type: "area", accent: "#10b981" })}
                 />
                 <ChartCard
                   type="donut"
@@ -668,6 +944,7 @@ export default function AdminConsole() {
                   points={charts.stage_latency_breakdown}
                   subtitle="Phân bố độ trễ theo từng giai đoạn xử lý"
                   title="Phân tách quy trình"
+                  onClick={() => setDrillDown({ title: "Phân tách quy trình", data: charts.stage_latency_breakdown, type: "donut" })}
                 />
                 <ChartCard
                   type="donut"
@@ -675,6 +952,7 @@ export default function AdminConsole() {
                   points={charts.backend_distribution}
                   subtitle="Các backend đang phục vụ tóm tắt"
                   title="Phân bổ Backend"
+                  onClick={() => setDrillDown({ title: "Phân bổ Backend", data: charts.backend_distribution, type: "donut" })}
                 />
                 <ChartCard
                   type="donut"
@@ -682,6 +960,7 @@ export default function AdminConsole() {
                   points={charts.device_distribution}
                   subtitle="Phần cứng đang vận hành model (CPU/GPU)"
                   title="Thiết bị Vận hành"
+                  onClick={() => setDrillDown({ title: "Thiết bị Vận hành", data: charts.device_distribution, type: "donut" })}
                 />
               </div>
 
@@ -712,6 +991,7 @@ export default function AdminConsole() {
                   points={charts.chunk_trend}
                   subtitle="Số lượng chunk được trích xuất từ tài liệu"
                   title="Xu hướng Chunk RAG"
+                  onClick={() => setDrillDown({ title: "Xu hướng Chunk RAG", data: charts.chunk_trend, type: "area", accent: "#3b82f6" })}
                 />
                 <ChartCard
                   type="donut"
@@ -719,6 +999,7 @@ export default function AdminConsole() {
                   points={charts.activity_distribution}
                   subtitle="Các hành động chính của người dùng"
                   title="Phân bổ Hành động"
+                  onClick={() => setDrillDown({ title: "Phân bổ Hành động", data: charts.activity_distribution, type: "donut" })}
                 />
                 <ChartCard
                   type="donut"
@@ -726,6 +1007,7 @@ export default function AdminConsole() {
                   points={charts.rating_distribution}
                   subtitle="Phản hồi từ người dùng về chất lượng"
                   title="Phân bổ Đánh giá"
+                  onClick={() => setDrillDown({ title: "Phân bổ Đánh giá", data: charts.rating_distribution, type: "donut" })}
                 />
                 <ChartCard
                   accent="#10b981"
@@ -733,25 +1015,45 @@ export default function AdminConsole() {
                   points={charts.user_growth}
                   subtitle="Đối chiếu tăng trưởng người dùng và dữ liệu"
                   title="Tương quan Người dùng"
+                  onClick={() => setDrillDown({ title: "Tương quan Người dùng", data: charts.user_growth, type: "area", accent: "#10b981" })}
+                />
+              </div>
+
+              <div className="chart-grid chart-grid-2">
+                <ChartCard
+                  type="bar"
+                  accent="#8b5cf6"
+                  icon={BarChart3}
+                  points={charts.length_histogram || []}
+                  subtitle="Phân phối độ dài của văn bản đầu vào"
+                  title="Phân phối Độ dài Đầu vào"
+                  onClick={() => setDrillDown({ title: "Dữ liệu Phân phối Độ dài", data: charts.length_histogram, type: "bar", accent: "#8b5cf6" })}
                 />
               </div>
 
               <InsightTable
                 icon={Database}
                 columns={[
-                  { key: "label", label: "Đối tượng / User", render: (value) => <code>{value}</code> },
-                  { key: "value", label: "Số lượng" },
-                  { key: "secondary", label: "Thông tin chi tiết" },
-                  { key: "status", label: "Trạng thái" },
+                  { key: "label", label: "Nội dung", render: (value) => <code>{value}</code> },
+                  { key: "value", label: "Số lần trùng lặp", render: (value) => <strong>{value}</strong> },
                 ]}
-                rows={tables.top_endpoints || []}
-                subtitle="Phân tích chi tiết lưu lượng và tải tài nguyên"
-                title="Phân ích Vận hành"
+                rows={tables.top_inputs || []}
+                subtitle="Các văn bản được gửi lên nhiều nhất"
+                title="Top Truy vấn Trùng lặp"
               />
             </section>
           ) : null}
         </div>
       </main>
+      {drillDown && (
+        <DrillDownModal
+          title={drillDown.title}
+          data={drillDown.data}
+          type={drillDown.type}
+          accent={drillDown.accent}
+          onClose={() => setDrillDown(null)}
+        />
+      )}
     </div>
   );
 }

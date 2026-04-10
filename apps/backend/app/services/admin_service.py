@@ -17,6 +17,13 @@ from app.models.user_activity import UserActivity
 def list_users(db: Session) -> list[AppUser]:
     return db.query(AppUser).order_by(AppUser.created_at.desc()).all()
 
+def _percentile(values: list[float], p: float) -> float:
+    cleaned = sorted([float(val) for val in values if val is not None])
+    if not cleaned: return 0.0
+    idx = int((p / 100.0) * len(cleaned))
+    return cleaned[min(idx, len(cleaned) - 1)]
+
+
 
 def get_logs(db: Session, limit: int = 200) -> list[SystemLog]:
     return db.query(SystemLog).order_by(SystemLog.created_at.desc()).limit(limit).all()
@@ -41,6 +48,7 @@ def get_admin_analytics(db: Session) -> dict[str, Any]:
 
     overview = [
         _metric("Tổng người dùng", total_users, detail=f"{active_users} hoạt động / {admin_users} quản trị"),
+        _metric("K. Khách (WAU)", len({act.user_id for act in activities}), detail="Khách truy cập gần đây"),
         _metric("Hội thoại", len(conversations), detail=f"{len(messages)} tin nhắn"),
         _metric("Tài liệu", len(documents), detail=f"{sum(doc.chunk_count or 0 for doc in documents)} chunks trích xuất"),
         _metric("Yêu cầu (Requests)", total_logs, detail=f"{len(error_logs)} lỗi gần đây"),
@@ -53,18 +61,24 @@ def get_admin_analytics(db: Session) -> dict[str, Any]:
         _metric("Điểm cuối (Endpoints)", len({log.endpoint for log in logs}), detail="Từ nhật ký hệ thống"),
     ]
 
+    latencies = [log.latency for log in inference_logs if log.latency]
     model_metrics = [
         _metric("Yêu cầu Inference", len(inference_logs), detail="Số lần gọi model AI"),
-        _metric("Độ trễ Model", round(_avg([log.latency for log in inference_logs]), 3), unit="s"),
-        _metric("Độ trễ sinh văn bản", round(_avg([log.generation_latency for log in inference_logs]), 3), unit="s"),
+        _metric("Độ trễ trung bình", round(_avg(latencies), 3), unit="s"),
+        _metric("Độ trễ (p50)", round(_percentile(latencies, 50), 3), unit="s"),
+        _metric("Độ trễ (p95)", round(_percentile(latencies, 95), 3), unit="s"),
+        _metric("Độ trễ (p99)", round(_percentile(latencies, 99), 3), unit="s"),
         _metric("Tỷ lệ Fallback", round(_ratio(sum(1 for log in inference_logs if log.used_model_fallback), len(inference_logs)), 2), unit="%"),
         _metric("Tỷ lệ nén trung bình", round(_avg([log.compression_ratio for log in inference_logs]), 4)),
-        _metric("Chunks truy vấn avg", round(_avg([log.retrieved_chunk_count for log in inference_logs]), 2)),
+        _metric("Token trung bình ước tính", int(_avg([log.input_word_count for log in inference_logs]) * 1.3), detail="Input tokens"),
     ]
 
     avg_rating = _avg([rating.rating for rating in ratings])
+    input_lens = [log.input_word_count for log in inference_logs if log.input_word_count]
     data_metrics = [
-        _metric("Số từ đầu vào avg", round(_avg([log.input_word_count for log in inference_logs]), 2)),
+        _metric("Số từ đầu vào avg", round(_avg(input_lens), 2)),
+        _metric("Đầu vào Max", max(input_lens) if input_lens else 0, detail="từ (word count)"),
+        _metric("Đầu vào Min", min(input_lens) if input_lens else 0, detail="từ (word count)"),
         _metric("Số từ tóm tắt avg", round(_avg([log.summary_word_count for log in inference_logs]), 2)),
         _metric("Đánh giá trung bình", round(avg_rating, 2), detail=f"{len(ratings)} phản hồi"),
         _metric("Hoạt động người dùng", len(activities), detail="Hành động ghi nhận"),
@@ -108,6 +122,8 @@ def get_admin_analytics(db: Session) -> dict[str, Any]:
             lambda item: item.created_at,
             lambda item: item.retrieved_chunk_count,
         ),
+        "length_histogram": _build_histogram([log.input_word_count for log in inference_logs]),
+        "hourly_volume": _hourly_series(logs, lambda item: item.created_at, hours=24),
     }
 
     user_lookup = {str(user.id): user.email for user in users}
@@ -153,6 +169,8 @@ def get_admin_analytics(db: Session) -> dict[str, Any]:
             }
             for user_id, count in Counter(str(activity.user_id) for activity in activities).most_common(8)
         ],
+        "top_inputs": _top_inputs(messages),
+        "retention": _retention_table(activities),
     }
 
     return {
@@ -231,3 +249,61 @@ from app.core.timezone import get_now
 def _date_slots(days: int) -> list[Any]:
     today = get_now().date()
     return [today - timedelta(days=offset) for offset in reversed(range(days))]
+
+def _build_histogram(values: list[int | None]) -> list[dict[str, Any]]:
+    buckets = [
+        {"label": "0-200", "min": 0, "max": 200, "value": 0},
+        {"label": "200-500", "min": 200, "max": 500, "value": 0},
+        {"label": "500-1000", "min": 500, "max": 1000, "value": 0},
+        {"label": ">1000", "min": 1000, "max": float("inf"), "value": 0},
+    ]
+    for v in values:
+        if v is None: continue
+        for b in buckets:
+            if b["min"] <= v < b["max"]:
+                b["value"] += 1
+                break
+    return buckets
+
+def _hourly_series(items: list[Any], date_getter, hours: int = 24) -> list[dict[str, Any]]:
+    now = get_now()
+    slots = [now - timedelta(hours=offset) for offset in reversed(range(hours))]
+    values = {slot.strftime("%H:00"): 0 for slot in slots}
+    for item in items:
+        item_date = date_getter(item)
+        if item_date is None or item_date < now - timedelta(hours=hours):
+            continue
+        key = item_date.strftime("%H:00")
+        if key in values:
+            values[key] += 1
+    return [{"label": k, "value": v} for k, v in values.items()]
+
+def _retention_table(activities: list[Any]) -> list[dict[str, Any]]:
+    now = get_now().date()
+    yesterday = now - timedelta(days=1)
+    last_week = now - timedelta(days=7)
+    user_pool = {}
+    for act in activities:
+        uid = act.user_id
+        d = act.created_at.date()
+        if uid not in user_pool: user_pool[uid] = set()
+        user_pool[uid].add(d)
+    
+    active_now = {u for u, days in user_pool.items() if now in days}
+    active_yesterday = {u for u, days in user_pool.items() if yesterday in days}
+    active_last_week = {u for u, days in user_pool.items() if last_week in days}
+    
+    ret_1d = (len(active_now.intersection(active_yesterday)) / len(active_yesterday) * 100) if active_yesterday else 0
+    ret_7d = (len(active_now.intersection(active_last_week)) / len(active_last_week) * 100) if active_last_week else 0
+    return [
+        {"label": "Hôm qua (1d)", "value": round(ret_1d, 1), "secondary": "% trở lại", "tertiary": f"{len(active_yesterday)} user"},
+        {"label": "Tuần trước (7d)", "value": round(ret_7d, 1), "secondary": "% trở lại", "tertiary": f"{len(active_last_week)} user"},
+    ]
+
+def _top_inputs(messages: list[Any], limit: int = 10) -> list[dict[str, Any]]:
+    contents = [m.content for m in messages if m.is_user and m.content]
+    counts = Counter(contents)
+    return [
+        {"label": (content[:40] + "...") if len(content) > 40 else content, "value": count, "secondary": "lượt", "tertiary": content}
+        for content, count in counts.most_common(limit)
+    ]
