@@ -18,7 +18,7 @@ class Settings:
     app_name: str = "SummVi Vietnamese Summarization API"
     app_version: str = "2.0.0"
     api_prefix: str = "/api/v1"
-    cors_origins: list[str] = os.getenv("CORS_ORIGINS", "*").split(",")
+    cors_origins: tuple[str, ...] = tuple(os.getenv("CORS_ORIGINS", "*").split(","))
     lite_mode: bool = os.getenv("LITE_MODE", "false").lower() in {"1", "true", "yes", "on"}
     secret_key: str = os.getenv("SECRET_KEY", "")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
