@@ -4,17 +4,26 @@ function normalizeBaseUrl(value, fallback) {
 
 const IS_PROD = typeof window !== "undefined" && !window.location.hostname.includes("localhost");
 
-const getDynamicBaseUrl = (envValue, port) => {
-  if (envValue && !envValue.includes("localhost")) return normalizeBaseUrl(envValue, "");
+const getDynamicBaseUrl = (envValue, port, isLegacy = false) => {
   if (typeof window !== "undefined") {
-    const { hostname, protocol } = window.location;
-    return `${protocol}//${hostname}:${port}`;
+    // In Browser: Route through NextJS rewrites to avoid firewall drops
+    // Only trust envValue directly if it's a full absolute external URL (not localhost)
+    if (envValue && envValue.startsWith("http") && !envValue.includes("localhost")) {
+      return normalizeBaseUrl(envValue, "");
+    }
+    return isLegacy ? "/api/v1" : "/api";
   }
-  return `http://localhost:${port}`;
+
+  // Server-side (SSR / RSC inside Docker or locally):
+  // Node.js fetch REQUIRES complete absolute URLs.
+  // Prioritize Docker internal network name, user env (if absolute), then fallback.
+  const envAbsURL = (envValue && envValue.startsWith("http")) ? envValue : null;
+  const ssrBase = (process.env.INTERNAL_BACKEND_URL || envAbsURL || `http://localhost:${port}`).replace(/\/$/, "");
+  return isLegacy ? `${ssrBase}/api/v1` : ssrBase;
 };
 
-const API_BASE_URL = getDynamicBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL, 8000);
-const LEGACY_API_BASE_URL = getDynamicBaseUrl(process.env.NEXT_PUBLIC_LEGACY_API_BASE_URL, 8000) + "/api/v1";
+const API_BASE_URL = getDynamicBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL, 8000, false);
+const LEGACY_API_BASE_URL = getDynamicBaseUrl(process.env.NEXT_PUBLIC_LEGACY_API_BASE_URL, 8000, true);
 
 function buildHeaders(token, isJson = true) {
   const headers = {};
