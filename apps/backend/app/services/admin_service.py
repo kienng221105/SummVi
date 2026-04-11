@@ -267,11 +267,17 @@ def _build_histogram(values: list[int | None]) -> list[dict[str, Any]]:
 
 def _hourly_series(items: list[Any], date_getter, hours: int = 24) -> list[dict[str, Any]]:
     now = get_now()
+    # Ensure comparison works by normalizing to naive datetime if database items are naive
+    now_naive = now.replace(tzinfo=None)
     slots = [now - timedelta(hours=offset) for offset in reversed(range(hours))]
     values = {slot.strftime("%H:00"): 0 for slot in slots}
     for item in items:
         item_date = date_getter(item)
-        if item_date is None or item_date < now - timedelta(hours=hours):
+        if item_date is None:
+            continue
+        # Support both aware and naive comparison by normalizing to naive
+        item_date_naive = item_date.replace(tzinfo=None) if item_date.tzinfo else item_date
+        if item_date_naive < now_naive - timedelta(hours=hours):
             continue
         key = item_date.strftime("%H:00")
         if key in values:
