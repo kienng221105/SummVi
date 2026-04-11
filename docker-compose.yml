@@ -28,6 +28,7 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - LITE_MODE=true
       - TZ=Asia/Ho_Chi_Minh
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     volumes:
       - ./data:/app/data
       - ./chroma_data:/app/chroma_data
@@ -54,6 +55,7 @@ services:
     environment:
       - NEXT_PUBLIC_API_BASE_URL=/api
       - INTERNAL_BACKEND_URL=http://backend:8000
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     networks:
       - summvi-network
     ports:

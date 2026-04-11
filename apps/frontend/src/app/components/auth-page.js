@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { getCurrentUser, loginUser, registerUser } from "../lib/api";
+import { getCurrentUser, loginUser, loginWithGoogle, registerUser } from "../lib/api";
 import { useSessionGuard } from "../lib/session-guard";
 import { createSession, mergeSessionWithUser, saveSession } from "../lib/session";
+
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "1044526588457-hg06sug0eg9ocit1djhmgh2c7be06ijn.apps.googleusercontent.com";
 
 export default function AuthPage({ mode, title, subtitle }) {
   const router = useRouter();
@@ -18,6 +20,79 @@ export default function AuthPage({ mode, title, subtitle }) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const googleBtnRef = useRef(null);
+
+  // Load Google Identity Services script
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleGoogleCallback = async (response) => {
+      setSubmitting(true);
+      setError("");
+      try {
+        const token = await loginWithGoogle(response.credential);
+        const baseSession = createSession(token.access_token, "");
+        const currentUser = await getCurrentUser(baseSession.token);
+        const refreshedSession = mergeSessionWithUser(baseSession, currentUser);
+        saveSession(refreshedSession);
+        router.replace(refreshedSession.role === "admin" ? "/admin" : "/");
+        router.refresh();
+      } catch (err) {
+        setError(err.message || "Đăng nhập Google thất bại.");
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    // Make callback globally accessible for GIS
+    window.__handleGoogleCallback = handleGoogleCallback;
+
+    const existingScript = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+    if (existingScript) {
+      // Script already loaded, just initialize
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCallback,
+        });
+        if (googleBtnRef.current) {
+          window.google.accounts.id.renderButton(googleBtnRef.current, {
+            type: "standard",
+            theme: "outline",
+            size: "large",
+            text: isLogin ? "signin_with" : "signup_with",
+            shape: "rectangular",
+            width: "100%",
+          });
+        }
+      }
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCallback,
+        });
+        if (googleBtnRef.current) {
+          window.google.accounts.id.renderButton(googleBtnRef.current, {
+            type: "standard",
+            theme: "outline",
+            size: "large",
+            text: isLogin ? "signin_with" : "signup_with",
+            shape: "rectangular",
+            width: "100%",
+          });
+        }
+      }
+    };
+    document.head.appendChild(script);
+  }, [isLogin, router]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -108,6 +183,15 @@ export default function AuthPage({ mode, title, subtitle }) {
                 ? "Đăng nhập để tiếp tục công việc tóm tắt."
                 : "Đăng ký để trải nghiệm dịch vụ tóm tắt thông minh."}
             </p>
+          </div>
+
+          {/* Google Sign-In Button */}
+          <div className="google-signin-wrapper">
+            <div ref={googleBtnRef} className="google-btn-container" />
+          </div>
+
+          <div className="auth-divider">
+            <span>hoặc</span>
           </div>
 
           <form className="auth-form" onSubmit={handleSubmit}>

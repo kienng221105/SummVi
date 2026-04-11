@@ -1956,6 +1956,42 @@ textarea {
   font-weight: 700;
 }
 
+.google-signin-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.google-btn-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.google-btn-container>div {
+  width: 100% !important;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: lowercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border-color), transparent);
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;

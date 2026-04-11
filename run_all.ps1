@@ -26,6 +26,15 @@ $env:PYTHONPATH = $ROOT.Path
 $env:LITE_MODE = "true"
 $env:NODE_OPTIONS = "--max-old-space-size=4096"
 
+# Load all variables from .env into current session
+Get-Content ".env" | ForEach-Object {
+    if ($_ -match '^\s*([^#][^=]+)=(.*)$') {
+        $key = $Matches[1].Trim()
+        $val = $Matches[2].Trim()
+        [System.Environment]::SetEnvironmentVariable($key, $val, "Process")
+    }
+}
+
 # 4. Start Backend in new window
 Write-Host "Starting Backend..."
 Start-Process powershell -ArgumentList "-NoExit -Command cd apps/backend; python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"

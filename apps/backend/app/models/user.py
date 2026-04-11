@@ -12,7 +12,8 @@ class AppUser(Base):
 
     id = Column(GUID(), primary_key=True, index=True, default=uuid4)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=True)
+    google_id = Column(String(255), unique=True, nullable=True, index=True)
     role = Column(String(32), default="user", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=get_now, nullable=False)

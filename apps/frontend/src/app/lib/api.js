@@ -114,6 +114,13 @@ export async function getCurrentUser(token) {
   return request("/auth/me", { token });
 }
 
+export async function loginWithGoogle(idToken) {
+  return request("/auth/google", {
+    method: "POST",
+    body: { id_token: idToken },
+  });
+}
+
 export async function uploadDocument(token, file) {
   const formData = new FormData();
   formData.append("file", file);

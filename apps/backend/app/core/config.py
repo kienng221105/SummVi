@@ -18,7 +18,7 @@ class Settings:
     app_name: str = "SummVi Vietnamese Summarization API"
     app_version: str = "2.0.0"
     api_prefix: str = "/api/v1"
-    cors_origins: tuple[str, ...] = ("*",)
+    cors_origins: list[str] = os.getenv("CORS_ORIGINS", "*").split(",")
     lite_mode: bool = os.getenv("LITE_MODE", "false").lower() in {"1", "true", "yes", "on"}
     secret_key: str = os.getenv("SECRET_KEY", "")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
@@ -26,6 +26,7 @@ class Settings:
     default_admin_password: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "Admin@123")
     postgres_host: str = os.getenv("POSTGRES_HOST", "localhost")
     chroma_persist_dir: str = os.getenv("CHROMA_PERSIST_DIR", str(ROOT_DIR / "chroma_data"))
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     chroma_http_host: str | None = os.getenv("CHROMA_HTTP_HOST") or None
     chroma_http_port: int = int(os.getenv("CHROMA_HTTP_PORT", "8000"))
     chroma_http_ssl: bool = os.getenv("CHROMA_HTTP_SSL", "false").lower() in {"1", "true", "yes", "on"}
