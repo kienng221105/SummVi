@@ -1,0 +1,17 @@
+yaml
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development # QUAN TRỌNG: Đổi từ production sang development
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    # Thêm lệnh chạy dev để Tailwind quét file liên tục
+    command: npm run dev 

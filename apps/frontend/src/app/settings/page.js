@@ -1,11 +1,16 @@
 import SettingsConsole from "../components/settings-console";
 
-
+/**
+ * SettingsPage component - Phiên bản JavaScript (.js)
+ */
 export const metadata = {
-  title: "Cài đặt | SummVi",
+  title: "Hồ sơ cá nhân | SummVi",
 };
 
-
 export default function SettingsPage() {
-  return <SettingsConsole />;
+  return (
+    <main className="min-h-screen bg-slate-50">
+      <SettingsConsole />
+    </main>
+  );
 }
