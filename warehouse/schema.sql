@@ -105,6 +105,18 @@ CREATE TABLE IF NOT EXISTS inference_logs (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS analytics (
+    id UUID PRIMARY KEY,
+    topic VARCHAR(128) NOT NULL DEFAULT 'General',
+    keywords TEXT NOT NULL DEFAULT '[]',
+    summary_length INTEGER NOT NULL,
+    compression_ratio DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_topic ON analytics(topic);
+CREATE INDEX IF NOT EXISTS idx_analytics_created_at ON analytics(created_at);
+
 CREATE OR REPLACE VIEW bi_inference_metrics_daily AS
 SELECT
     DATE(created_at) AS metric_date,
@@ -125,3 +137,15 @@ SELECT
 FROM inference_logs
 GROUP BY DATE(created_at)
 ORDER BY metric_date DESC;
+
+CREATE OR REPLACE VIEW bi_analytics_daily AS
+SELECT
+    DATE(created_at) AS metric_date,
+    topic,
+    COUNT(*) AS total_summaries,
+    ROUND(AVG(summary_length)::numeric, 2) AS avg_summary_length,
+    ROUND(AVG(compression_ratio)::numeric, 4) AS avg_compression_ratio
+FROM analytics
+GROUP BY DATE(created_at), topic
+ORDER BY metric_date DESC;
+

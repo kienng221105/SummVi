@@ -6,6 +6,10 @@ from sqlalchemy import create_engine
 
 
 def _build_database_uri() -> str:
+    """
+    Xây dựng URI kết nối database từ biến môi trường.
+    Ưu tiên sử dụng DATABASE_URL nếu có, nếu không sẽ build từ các biến riêng lẻ.
+    """
     database_url = os.getenv("DATABASE_URL")
     if database_url:
         return database_url
@@ -23,12 +27,25 @@ def _build_database_uri() -> str:
 
 
 def export_inference_logs(output_dir: str = "./warehouse/exports") -> dict:
+    """
+    Xuất dữ liệu inference logs từ database ra file CSV để phân tích.
+
+    Chức năng:
+    - Trích xuất toàn bộ logs từ bảng inference_logs
+    - Tính toán các metrics tổng hợp theo ngày (avg latency, compression ratio, etc.)
+    - Xuất ra 2 file CSV: logs chi tiết và metrics tổng hợp
+
+    Returns:
+        dict: Thông tin về số dòng đã xuất và đường dẫn file
+    """
     db_uri = _build_database_uri()
     target_dir = Path(output_dir).resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
 
     engine = create_engine(db_uri)
+    # Query 1: Lấy toàn bộ logs chi tiết
     logs_query = "SELECT * FROM inference_logs ORDER BY created_at DESC"
+    # Query 2: Tính metrics tổng hợp theo ngày (latency, compression, fallback count, etc.)
     metrics_query = """
         SELECT
             DATE(created_at) AS metric_date,

@@ -896,7 +896,7 @@ export default function AdminConsole() {
                   { key: "user_id", label: "Người dùng", render: (value) => value || "vô danh" },
                   { key: "created_at", label: "Thời gian", render: (value) => formatDate(value) },
                 ]}
-                rows={logs}
+                rows={logs.slice(0, 20)}
                 subtitle="Nhật ký hệ thống gần đây"
                 title="Logs và Hiệu suất"
               />
@@ -1037,9 +1037,30 @@ export default function AdminConsole() {
                   { key: "label", label: "Nội dung", render: (value) => <code>{value}</code> },
                   { key: "value", label: "Số lần trùng lặp", render: (value) => <strong>{value}</strong> },
                 ]}
-                rows={tables.top_inputs || []}
+                rows={(tables.top_inputs || []).slice(0, 20)}
                 subtitle="Các văn bản được gửi lên nhiều nhất"
                 title="Top Truy vấn Trùng lặp"
+              />
+
+              <InsightTable
+                icon={Users}
+                columns={[
+                  { key: "email", label: "Email", render: (value) => <code>{value}</code> },
+                  {
+                    key: "rating",
+                    label: "Đánh giá",
+                    render: (value) => (
+                      <span style={{ color: value >= 4 ? "#10b981" : value >= 3 ? "#f59e0b" : "#ef4444", fontWeight: 600 }}>
+                        {"★".repeat(value)}{"☆".repeat(5 - value)}
+                      </span>
+                    ),
+                  },
+                  { key: "feedback", label: "Phản hồi" },
+                  { key: "created_at", label: "Thời gian", render: (value) => formatDate(value) },
+                ]}
+                rows={(tables.ratings_detail || []).slice(0, 20)}
+                subtitle="Chi tiết đánh giá chất lượng tóm tắt từ người dùng"
+                title="Chi tiết Đánh giá Người dùng"
               />
             </section>
           ) : null}

@@ -48,6 +48,14 @@ function getInitials(email) {
 }
 
 function splitSummary(summary) {
+  /**
+   * Tách summary thành các bullet points để render dạng list.
+   *
+   * Logic:
+   * - Split theo newline hoặc sau dấu câu (. ! ?)
+   * - Regex lookbehind (?<=...) để giữ dấu câu trong kết quả
+   * - Filter bỏ empty strings
+   */
   if (!summary) {
     return [];
   }
@@ -333,6 +341,14 @@ export default function WorkspacePage() {
   }
 
   async function hydrateConversation(token, conversationId) {
+    /**
+     * Load chi tiết conversation từ API và populate vào UI state.
+     *
+     * Race condition handling:
+     * - Dùng requestId để track request mới nhất
+     * - Nếu có request mới được gọi trước khi request cũ hoàn thành, ignore kết quả của request cũ
+     * - Pattern này tránh state bị overwrite bởi response chậm hơn
+     */
     const requestId = ++hydrateRequestIdRef.current;
     setConversationLoading(true);
     try {
@@ -340,6 +356,7 @@ export default function WorkspacePage() {
         getConversationMessages(token, conversationId),
         getConversationRating(token, conversationId).catch(() => null),
       ]);
+      // Check nếu có request mới hơn đã được gọi -> ignore response này
       if (requestId !== hydrateRequestIdRef.current) {
         return;
       }
@@ -396,6 +413,15 @@ export default function WorkspacePage() {
   }
 
   async function handleSummarize() {
+    /**
+     * Gọi API tạo tóm tắt với fallback logic.
+     *
+     * Flow:
+     * 1. Nếu có session token: gọi authenticated endpoint
+     * 2. Nếu 401 (token expired): fallback về legacy endpoint (không cần auth)
+     * 3. Nếu không có token: dùng legacy endpoint ngay
+     * 4. Sau khi tạo xong: reload conversation list để sync UI
+     */
     const inputText = text;
     if (!inputText.trim()) {
       setError("Cần nhập hoặc tải lên nội dung văn bản để tóm tắt.");
@@ -422,6 +448,7 @@ export default function WorkspacePage() {
         try {
           response = await summarizeText(session.token, requestPayload);
         } catch (requestError) {
+          // Fallback: nếu token expired, thử legacy endpoint
           if (requestError?.status === 401) {
             response = await summarizeLegacy(requestPayload);
           } else {

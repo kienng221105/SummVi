@@ -15,6 +15,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV DOCKER true
+ENV NEXT_PUBLIC_API_BASE_URL /api
 RUN npm run build
 
 # Production image, copy all the files and run next

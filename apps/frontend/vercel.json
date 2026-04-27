@@ -1,4 +1,14 @@
 {
   "version": 2,
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "/api/v1/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    }
+  ]
 }

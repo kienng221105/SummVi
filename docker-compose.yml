@@ -10,34 +10,82 @@ services:
       TZ: Asia/Ho_Chi_Minh
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./warehouse/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d summarization" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - summvi-network
     ports:
       - "5432:5432"
 
-  backend:
+  model-service:
     build:
       context: .
-      dockerfile: apps/backend/Dockerfile
-    container_name: summvi-backend
+      dockerfile: backend/model-service/Dockerfile
+    container_name: summvi-model-service
     restart: always
-    depends_on:
-      - db
     environment:
-      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-summarization}
-      - SECRET_KEY=${SECRET_KEY}
-      - LITE_MODE=true
+      - LITE_MODE=${LITE_MODE:-true}
       - TZ=Asia/Ho_Chi_Minh
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - VIT5_MODEL_NAME=${VIT5_MODEL_NAME}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME}
+      - HF_HOME=/app/data/models/cache
+      - CHROMA_PERSIST_DIR=/app/chroma_data
+      - CHROMA_HTTP_HOST=${CHROMA_HTTP_HOST}
+      - CHROMA_HTTP_PORT=${CHROMA_HTTP_PORT:-8000}
+      - CHROMA_HTTP_SSL=${CHROMA_HTTP_SSL:-false}
+      - CHROMA_TENANT=${CHROMA_TENANT:-default_tenant}
+      - CHROMA_DATABASE=${CHROMA_DATABASE:-default_database}
+      - RAG_TOP_K=${RAG_TOP_K:-4}
+      - RAG_CHUNK_SIZE=${RAG_CHUNK_SIZE:-160}
+      - RAG_CHUNK_OVERLAP=${RAG_CHUNK_OVERLAP:-32}
     volumes:
       - ./data:/app/data
       - ./chroma_data:/app/chroma_data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8001/health" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    networks:
+      - summvi-network
+    ports:
+      - "8001:8001"
+
+  api-service:
+    build:
+      context: .
+      dockerfile: backend/api-service/Dockerfile
+    container_name: summvi-api-service
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      model-service:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-summarization}
+      - SECRET_KEY=${SECRET_KEY}
+      - TZ=Asia/Ho_Chi_Minh
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GSHEET_CREDENTIALS_FILE=/app/credentials/service_account.json
+      - GSHEET_SPREADSHEET_ID=${GSHEET_SPREADSHEET_ID}
+      - GSHEET_WORKSHEET_NAME=${GSHEET_WORKSHEET_NAME}
+      - MODEL_SERVICE_URL=${MODEL_SERVICE_URL:-http://model-service:8001}
+      - MODEL_SERVICE_TIMEOUT_SECONDS=${MODEL_SERVICE_TIMEOUT_SECONDS:-120}
+    volumes:
+      - ./warehouse:/app/warehouse
+      - ./credentials:/app/credentials:ro
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 30s
     networks:
       - summvi-network
     ports:
@@ -50,12 +98,18 @@ services:
     container_name: summvi-frontend
     restart: always
     depends_on:
-      backend:
+      api-service:
         condition: service_healthy
     environment:
       - NEXT_PUBLIC_API_BASE_URL=/api
-      - INTERNAL_BACKEND_URL=http://backend:8000
+      - INTERNAL_BACKEND_URL=http://api-service:8000
       - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - summvi-network
     ports:

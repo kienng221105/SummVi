@@ -1,19 +1,4 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "apps/frontend/package.json",
-      "use": "@vercel/next"
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    },
-    {
-      "source": "/summarize",
-      "destination": "/api/v1/summarize"
-    }
-  ]
+  "root": "apps/frontend"
 }

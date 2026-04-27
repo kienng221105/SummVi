@@ -1,10 +1,26 @@
 function normalizeBaseUrl(value, fallback) {
+  /**
+   * Chuẩn hóa base URL: loại bỏ trailing slash.
+   */
   return (value || fallback).replace(/\/$/, "");
 }
 
 const IS_PROD = typeof window !== "undefined" && !window.location.hostname.includes("localhost");
 
 const getDynamicBaseUrl = (envValue, port, isLegacy = false) => {
+  /**
+   * Xác định base URL động dựa trên môi trường (browser vs server-side).
+   *
+   * Browser (client-side):
+   * - Route qua NextJS rewrites để tránh CORS và firewall issues
+   * - Chỉ trust envValue nếu là absolute external URL (không phải localhost)
+   * - Fallback về relative path /api hoặc /api/v1
+   *
+   * Server-side (SSR/RSC):
+   * - Node.js fetch yêu cầu absolute URLs
+   * - Ưu tiên Docker internal network (INTERNAL_BACKEND_URL)
+   * - Fallback về env var hoặc localhost
+   */
   if (typeof window !== "undefined") {
     // In Browser: Route through NextJS rewrites to avoid firewall drops
     // Only trust envValue directly if it's a full absolute external URL (not localhost)
@@ -64,22 +80,41 @@ async function parseResponse(response) {
 }
 
 async function request(path, options = {}) {
+  /**
+   * Generic HTTP request wrapper với retry logic.
+   *
+   * Features:
+   * - Auto retry 3 lần với exponential backoff
+   * - Parse JSON response và error handling
+   * - Support cả authenticated và public endpoints
+   * - Hỗ trợ cả JSON và FormData body
+   *
+   * Retry logic: chỉ retry network errors, không retry HTTP errors (4xx, 5xx)
+   */
   const { method = "GET", token, body, useLegacyBase = false, isJson = true } = options;
   const baseUrl = useLegacyBase ? LEGACY_API_BASE_URL : API_BASE_URL;
-  try {
-    const response = await fetch(`${baseUrl}${path}`, {
-      method,
-      headers: buildHeaders(token, isJson),
-      body: body === undefined ? undefined : isJson ? JSON.stringify(body) : body,
-      cache: "no-store",
-    });
 
-    return parseResponse(response);
-  } catch (error) {
-    if (typeof error?.status === "number") {
-      throw error;
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${baseUrl}${path}`, {
+        method,
+        headers: buildHeaders(token, isJson),
+        body: body === undefined ? undefined : isJson ? JSON.stringify(body) : body,
+        cache: "no-store",
+      });
+
+      return parseResponse(response);
+    } catch (error) {
+      if (typeof error?.status === "number") {
+        throw error;
+      }
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, attempt * 1000));
+        continue;
+      }
+      throw new Error("Backend chưa sẵn sàng hoặc không thể kết nối. Hãy khởi động backend trước.");
     }
-    throw new Error("Backend chưa sẵn sàng hoặc không thể kết nối. Hãy khởi động backend trước.");
   }
 }
 

@@ -1,6 +1,12 @@
 const SESSION_KEY = "summvi-session";
 
 function decodeJwtSegment(segment) {
+  /**
+   * Decode một segment của JWT token (base64url).
+   *
+   * JWT format: header.payload.signature
+   * Mỗi segment là base64url encoded JSON
+   */
   if (!segment) {
     return null;
   }
@@ -15,6 +21,10 @@ function decodeJwtSegment(segment) {
 }
 
 function decodeToken(token) {
+  /**
+   * Decode JWT token để lấy payload (claims).
+   * Không verify signature - chỉ extract thông tin.
+   */
   if (!token) {
     return null;
   }
@@ -24,6 +34,10 @@ function decodeToken(token) {
 }
 
 export function createSession(accessToken, email) {
+  /**
+   * Tạo session object từ access token.
+   * Extract user info từ JWT claims.
+   */
   const claims = decodeToken(accessToken) || {};
   return {
     token: accessToken,

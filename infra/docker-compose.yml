@@ -1,3 +1,11 @@
+## ---------------------------------------------------------
+## LEGACY / DEPRECATED — file giữ lại để tham khảo.
+## Docker-compose CHÍNH thức nằm ở root: ./docker-compose.yml
+##
+## File này tham chiếu kiến trúc monolith cũ (apps/backend)
+## đã được tách thành: backend/api-service + backend/model-service
+## ---------------------------------------------------------
+
 services:
   postgres:
     image: postgres:16
@@ -12,7 +20,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ../warehouse/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d summarization"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d summarization" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,48 +32,6 @@ services:
       - "8001:8000"
     volumes:
       - chroma_data:/chroma/chroma
-
-  backend:
-    build:
-      context: ..
-      dockerfile: apps/backend/Dockerfile
-    container_name: vietsum-backend
-    environment:
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/summarization
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: summarization
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      CHROMA_PERSIST_DIR: /app/chroma_data
-      HF_HOME: /app/data/models/cache
-      VIT5_MODEL_NAME: VietAI/vit5-base-vietnews-summarization
-      EMBEDDING_MODEL_NAME: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      chromadb:
-        condition: service_started
-    volumes:
-      - ../data:/app/data
-      - ../warehouse:/app/warehouse
-      - chroma_backend_data:/app/chroma_data
-
-  frontend:
-    build:
-      context: ../apps/frontend
-      dockerfile: Dockerfile
-    container_name: vietsum-frontend
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
-      NEXT_PUBLIC_LEGACY_API_BASE_URL: http://localhost:8000/api/v1
-      NEXT_PUBLIC_METABASE_URL: http://localhost:3001
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
 
   metabase:
     image: metabase/metabase:v0.53.4
@@ -81,5 +47,4 @@ services:
 volumes:
   postgres_data:
   chroma_data:
-  chroma_backend_data:
   metabase_data:
