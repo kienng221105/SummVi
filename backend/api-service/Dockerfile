@@ -27,4 +27,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 ENV WEB_CONCURRENCY=1
 
-CMD ["sh", "-c", "gunicorn -w ${WEB_CONCURRENCY:-1} -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:${PORT:-8000}"]
+CMD ["sh", "-c", "gunicorn -w ${WEB_CONCURRENCY:-1} --timeout 120 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:${PORT:-8000}"]
