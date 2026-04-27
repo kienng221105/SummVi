@@ -8,7 +8,7 @@ def get_root_dir():
     for parent in current.parents:
         if (parent / "docker-compose.yml").exists() or (parent / "warehouse").exists():
             return parent
-    return current.parents[4]
+    return Path("/app")
 
 ROOT_DIR = get_root_dir()
 
