@@ -1,20 +1,14 @@
-import fitz  # PyMuPDF
-import docx
-from fastapi import UploadFile, HTTPException
 import io
+
+import fitz  # PyMuPDF
+from fastapi import HTTPException, UploadFile
+
 
 def extract_text_from_file(file: UploadFile, word_limit: int = 5000) -> str:
     """
-    Trích xuất text từ file upload (PDF, DOCX, TXT).
-
-    Supported formats:
-    - PDF: dùng PyMuPDF (fitz) để extract text từ tất cả pages
-    - DOCX: dùng python-docx để extract từ paragraphs
-    - TXT: đọc trực tiếp với UTF-8 fallback sang latin-1
-
-    Word limit: Giới hạn output để đảm bảo chất lượng tóm tắt.
+    Extract text from uploaded PDF, DOCX, or TXT files.
     """
-    filename = file.filename.lower()
+    filename = (file.filename or "").lower()
     content = ""
 
     try:
@@ -25,21 +19,24 @@ def extract_text_from_file(file: UploadFile, word_limit: int = 5000) -> str:
         elif filename.endswith(".txt"):
             content = _extract_from_txt(file)
         else:
-            raise HTTPException(status_code=400, detail="Định dạng file không hỗ trợ. Vui lòng dùng .pdf, .docx hoặc .txt")
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=f"Lỗi khi xử lý file: {str(e)}")
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file format. Use .pdf, .docx, or .txt.",
+            )
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Error processing file: {exc}") from exc
 
-    # Apply word limit
     words = content.split()
     if len(words) > word_limit:
         content = " ".join(words[:word_limit])
 
     return content.strip()
 
+
 def _extract_from_pdf(file: UploadFile) -> str:
-    """Extract text từ PDF file sử dụng PyMuPDF."""
+    """Extract text from a PDF file using PyMuPDF."""
     file_bytes = file.file.read()
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     text = ""
@@ -48,16 +45,29 @@ def _extract_from_pdf(file: UploadFile) -> str:
     doc.close()
     return text
 
+
 def _extract_from_docx(file: UploadFile) -> str:
-    """Extract text từ DOCX file sử dụng python-docx."""
+    """Extract text from a DOCX file using python-docx."""
+    try:
+        from docx import Document
+    except ModuleNotFoundError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "DOCX support requires the python-docx package. "
+                "Install backend/api-service/requirements.txt and restart the service."
+            ),
+        ) from exc
+
     file_bytes = file.file.read()
-    doc = docx.Document(io.BytesIO(file_bytes))
-    return "\n".join([para.text for para in doc.paragraphs])
+    doc = Document(io.BytesIO(file_bytes))
+    return "\n".join(para.text for para in doc.paragraphs)
+
 
 def _extract_from_txt(file: UploadFile) -> str:
     """
-    Extract text từ TXT file.
-    Thử UTF-8 trước, fallback sang latin-1 nếu decode error.
+    Extract text from a TXT file.
+    Tries UTF-8 first, then falls back to latin-1 on decode errors.
     """
     file_bytes = file.file.read()
     try:

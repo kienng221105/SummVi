@@ -47,7 +47,7 @@ if (Test-Path $apiReqFile) {
     $apiReqHash = (Get-FileHash $apiReqFile -Algorithm MD5).Hash
     if (-not (Test-Path $apiStampFile) -or (Get-Content $apiStampFile -ErrorAction SilentlyContinue) -ne $apiReqHash) {
         Write-Host "Installing api-service dependencies..." -ForegroundColor Yellow
-        pip install -r $apiReqFile --quiet 2>&1 | Out-Null
+        python -m pip install -r $apiReqFile --quiet 2>&1 | Out-Null
         $apiReqHash | Out-File $apiStampFile -NoNewline
         Write-Host "  Done" -ForegroundColor Green
     } else {
@@ -62,7 +62,7 @@ if (Test-Path $modelReqFile) {
     $modelReqHash = (Get-FileHash $modelReqFile -Algorithm MD5).Hash
     if (-not (Test-Path $modelStampFile) -or (Get-Content $modelStampFile -ErrorAction SilentlyContinue) -ne $modelReqHash) {
         Write-Host "Installing model-service dependencies..." -ForegroundColor Yellow
-        pip install -r $modelReqFile --quiet 2>&1 | Out-Null
+        python -m pip install -r $modelReqFile --quiet 2>&1 | Out-Null
         $modelReqHash | Out-File $modelStampFile -NoNewline
         Write-Host "  Done" -ForegroundColor Green
     } else {
