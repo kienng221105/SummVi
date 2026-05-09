@@ -1,44 +1,108 @@
-import os
-from pathlib import Path
-from typing import List
-
-from sentence_transformers import SentenceTransformer
-
-from ml.utils.text_utils import clean_text, hashed_vector
-
+import torch
+import torch.nn.functional as F
+from typing import cast
+from transformers import AutoTokenizer, AutoModel, PreTrainedModel, PreTrainedTokenizerBase
+from dataclasses import dataclass, field
+import numpy as np
+@dataclass
+class EmbeddedDocument:
+    doc_id: str
+    chunks: list[str]                 
+    embeddings: np.ndarray              
+    doc_embedding: np.ndarray           
+    warnings: list[str] = field(default_factory=list)
 
 class EmbeddingModel:
-    def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", cache_dir: str | None = None) -> None:
-        self.model_name = model_name
-        self.cache_dir = Path(cache_dir or os.getenv("HF_HOME", "./data/models/cache")).resolve()
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        os.environ.setdefault("HF_HOME", str(self.cache_dir))
+    MODEL_NAME = "vinai/phobert-base"
+    tokenizer: PreTrainedTokenizerBase
+    model: PreTrainedModel
+    def __init__(
+        self,
+        model_name: str | None = None,
+        cache_dir: str | None = None,
+        device: str | None = None,
+    ):
+        self.device = device or (
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
+        self.model_name = model_name or self.MODEL_NAME
+        self.tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(self.model_name, cache_dir=cache_dir))
+        self.model = AutoModel.from_pretrained(self.model_name, cache_dir=cache_dir)
+        self.model.eval()
+        self.model.to(self.device)
 
-        self.model = None
-        self.load_error: str | None = None
+    def embed_document(
+        self,
+        doc_id: str,
+        segmented_chunks: list[str],   
+    ) -> EmbeddedDocument:
+        warnings = []
+        if not segmented_chunks:
+            warnings.append(f"doc_id={doc_id}: no chunks to embed")
+            empty = np.zeros(self.model.config.hidden_size)
+            return EmbeddedDocument(
+                doc_id=doc_id,
+                chunks=segmented_chunks,
+                embeddings=empty,
+                doc_embedding=empty,
+                warnings=warnings,
+            )
+        embeddings = self._encode_chunks(segmented_chunks)
+        doc_embedding = embeddings.mean(axis=0)
+        return EmbeddedDocument(
+            doc_id=doc_id,
+            chunks=segmented_chunks,
+            embeddings=embeddings,
+            doc_embedding=doc_embedding,
+            warnings=warnings,
+        )
 
-        try:
-            self.model = SentenceTransformer(model_name, cache_folder=str(self.cache_dir))
-        except Exception as exc:
-            self.load_error = str(exc)
+    def embed_query(self, query: str) -> np.ndarray:
+        from underthesea import word_tokenize
+        segmented: str = str(word_tokenize(query, format="text"))  
+        embeddings = self._encode_chunks([segmented])
+        return embeddings[0]
 
-    def embed(self, texts: List[str]) -> List[List[float]]:
-        if not texts:
-            return []
+    def _encode_chunks(
+        self,
+        chunks: list[str],
+        batch_size: int = 16,
+    ) -> np.ndarray:
+        all_embeddings = []
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i : i + batch_size]
+            batch_embeddings = self._encode_batch(batch)
+            all_embeddings.append(batch_embeddings)
+        return np.vstack(all_embeddings)
 
-        cleaned_texts = [clean_text(text) for text in texts]
-        if self.model is not None:
-            return self.model.encode(cleaned_texts, normalize_embeddings=True).tolist()
+    def _encode_batch(self, batch: list[str]) -> np.ndarray:
+        encoded = self.tokenizer(
+            batch,
+            padding=True,
+            truncation=True,
+            max_length=256,    
+            return_tensors="pt",
+        ).to(self.device)
+        with torch.no_grad():
+            output = self.model(**encoded)
+        embeddings = self._mean_pool(
+            output.last_hidden_state,
+            encoded["attention_mask"],
+        )
+        embeddings = F.normalize(embeddings, p=2, dim=1)
+        return embeddings.cpu().numpy()
 
-        return [hashed_vector(text.split()) for text in cleaned_texts]
-
-    @property
-    def embedding_backend(self) -> str:
-        return "sentence_transformers" if self.model is not None else "hashed_fallback"
-
-    def diagnostics(self) -> dict:
-        return {
-            "embedding_model_name": self.model_name,
-            "embedding_backend": self.embedding_backend,
-            "embedding_load_error": self.load_error,
-        }
+    def _mean_pool(
+        self,
+        token_embeddings: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        mask_expanded = (
+            attention_mask
+            .unsqueeze(-1)
+            .expand(token_embeddings.size())
+            .float()
+        )
+        sum_embeddings = torch.sum(token_embeddings * mask_expanded, dim=1)
+        sum_mask = torch.clamp(mask_expanded.sum(dim=1), min=1e-9)
+        return sum_embeddings / sum_mask
