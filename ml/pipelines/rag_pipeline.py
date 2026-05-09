@@ -1,160 +1,271 @@
-import os
+from _typeshed import wsgi
 import time
-import uuid
-from typing import List
-
-import chromadb
-from chromadb.config import Settings as ChromaSettings
-
+from dataclasses import dataclass, field
+import torch
 from ml.models.embedding_model import EmbeddingModel
 from ml.models.vit5_model import ViT5Model
-from ml.utils.text_utils import clean_text, recursive_chunk_text
+from ml.utils.bm25_store import BM25Store
+from ml.utils.retriever import HybridRetriever, RetrievedChunk
+from ml.utils.reranker import CrossEncoderReranker
+from ml.utils.vector_store import VectorStore
+import re
+import logging
+logger = logging.getLogger(__name__)
+NEGATION_PATTERN = re.compile(
+    r"\b(không|tránh|đừng|ngừng|cấm|chớ)\s+\w+(?:\s+\w+){0,3}",
+    re.IGNORECASE,
+)
+@dataclass
+class RAGResult:
+    query: str
+    retrieved_chunks: list[RetrievedChunk]
+    context: str
+    warnings: list[str] = field(default_factory=list)
 
 
 class RAGPipeline:
+    RETRIEVAL_TOP_K = 10
+    RERANK_TOP_N = 5
+
     def __init__(
         self,
-        model: ViT5Model,
-        embedding_model: EmbeddingModel,
+        bm25_store: BM25Store | None = None,
+        vector_store: VectorStore | None = None,
+        embed_model: EmbeddingModel | None = None,
+        model: ViT5Model | None = None,
+        embedding_model: EmbeddingModel | None = None,
         persist_dir: str | None = None,
-        collection_name: str = "summarization_chunks",
-        top_k: int = 4,
-        chunk_size: int = 160,
-        chunk_overlap: int = 32,
-    ) -> None:
+        collection_name: str | None = None,
+        top_k: int | None = None,
+        chunk_size: int | None = None,
+        chunk_overlap: int | None = None,
+    ):
         self.model = model
-        self.embedding_model = embedding_model
-        self.persist_dir = persist_dir or os.getenv("CHROMA_PERSIST_DIR", "./chroma_data")
-        self.collection_name = collection_name
-        self.top_k = top_k
+        self.embed_model = embed_model or embedding_model
+        self.bm25 = bm25_store or BM25Store()
+        self.vector = vector_store or VectorStore(
+            persist_dir=persist_dir or "data/vector_store",
+            collection_name=collection_name or "documents",
+        )
+        self.retriever = HybridRetriever(
+            bm25_store=self.bm25,
+            vector_store=self.vector,
+            embed_model=self.embed_model,
+        )
+        self.reranker = CrossEncoderReranker()
+        self.top_k = top_k or self.RETRIEVAL_TOP_K
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        os.makedirs(self.persist_dir, exist_ok=True)
 
-        self.client = self._build_client()
-        self.collection = self.client.get_or_create_collection(name=self.collection_name)
-
-    def _build_client(self):
-        http_host = os.getenv("CHROMA_HTTP_HOST")
-        if http_host:
-            http_port = int(os.getenv("CHROMA_HTTP_PORT", "8000"))
-            http_ssl = os.getenv("CHROMA_HTTP_SSL", "false").lower() in {"1", "true", "yes", "on"}
-            http_tenant = os.getenv("CHROMA_TENANT", "default_tenant")
-            http_database = os.getenv("CHROMA_DATABASE", "default_database")
-            try:
-                return chromadb.HttpClient(
-                    host=http_host,
-                    port=http_port,
-                    ssl=http_ssl,
-                    settings=ChromaSettings(allow_reset=True),
-                    tenant=http_tenant,
-                    database=http_database,
-                )
-            except Exception:
-                pass
-
-        return chromadb.PersistentClient(
-            path=self.persist_dir,
-            settings=ChromaSettings(is_persistent=True, persist_directory=self.persist_dir),
-            tenant=os.getenv("CHROMA_TENANT", "default_tenant"),
-            database=os.getenv("CHROMA_DATABASE", "default_database"),
-        )
-
-    def _clean_text(self, text: str) -> str:
-        return clean_text(text)
-
-    def _chunk_text(self, text: str, chunk_size: int = 256, overlap: int = 48) -> List[str]:
-        return recursive_chunk_text(text, chunk_size=chunk_size, overlap=overlap)
-
-    def _store_chunks(self, request_id: str, chunks: List[str], embeddings: List[List[float]]) -> None:
-        ids = [str(uuid.uuid4()) for _ in chunks]
-        metadatas = [{"request_id": request_id, "chunk_index": index} for index, _ in enumerate(chunks)]
-        self.collection.upsert(documents=chunks, embeddings=embeddings, ids=ids, metadatas=metadatas)
-
-    def _retrieve_chunks(
+    def run(
         self,
-        request_id: str,
-        query_embedding: List[float],
-        fallback_chunks: List[str],
-    ) -> List[str]:
-        try:
-            result = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=min(self.top_k, max(1, len(fallback_chunks))),
-                where={"request_id": request_id},
+        query: str,
+        filter_doc_id: str | None = None,
+    ) -> RAGResult:
+        warnings = []
+        candidates = self.retriever.retrieve(
+            query=query,
+            top_k=self.top_k,
+            filter_doc_id=filter_doc_id,
+        )
+        if not candidates:
+            warnings.append("No chunks retrieved for query")
+            return RAGResult(
+                query=query,
+                retrieved_chunks=[],
+                context="",
+                warnings=warnings,
             )
-            documents = result.get("documents", [[]])[0]
-            if documents:
-                return [document for document in documents if document]
-        except Exception:
-            pass
-
-        return fallback_chunks[: self.top_k]
-
-    def _build_context(self, chunks: List[str], full_text: str) -> str:
-        context = " ".join(chunk.strip() for chunk in chunks if chunk.strip()).strip()
-        return context or full_text
-
-    def run(self, text: str) -> str:
-        return self.run_with_diagnostics(text)["summary"]
+        reranked = self.reranker.rerank(
+            query=query,
+            candidates=candidates,
+            top_n=self.RERANK_TOP_N,
+        )
+        context, fit_warnings = self._build_context(reranked)
+        warnings.extend(fit_warnings)
+        return RAGResult(
+            query=query,
+            retrieved_chunks=reranked,
+            context=context,
+            warnings=warnings,
+        )
 
     def run_with_diagnostics(
         self,
-        text: str,
+        query: str,
         summary_length: str = "medium",
         output_format: str = "paragraph",
+        filter_doc_id: str | None = None,
     ) -> dict:
-        cleaned_text = self._clean_text(text)
-        chunks = self._chunk_text(cleaned_text, chunk_size=self.chunk_size, overlap=self.chunk_overlap)
-        if not chunks:
-            diagnostics = {
-                "summary": "",
-                "chunk_count": 0,
-                "retrieved_chunk_count": 0,
-                "context_char_length": 0,
-                "retrieval_latency": 0.0,
-                "generation_latency": 0.0,
-                "rag_latency": 0.0,
-                "rag_top_k": self.top_k,
-                "chunk_size": self.chunk_size,
-                "chunk_overlap": self.chunk_overlap,
-            }
-            diagnostics.update(self.model.diagnostics())
-            diagnostics.update(self.embedding_model.diagnostics())
-            return diagnostics
-
+        if self.model is None:
+            raise ValueError("RAGPipeline requires model=ViT5Model for run_with_diagnostics")
         rag_start = time.perf_counter()
-        embeddings = self.embedding_model.embed(chunks)
-        request_id = str(uuid.uuid4())
-        self._store_chunks(request_id, chunks, embeddings)
-
         retrieval_start = time.perf_counter()
-        query_embedding = self.embedding_model.embed([cleaned_text])[0]
-        relevant_chunks = self._retrieve_chunks(request_id, query_embedding, chunks)
+        rag_result = self.run(query=query, filter_doc_id=filter_doc_id)
         retrieval_latency = time.perf_counter() - retrieval_start
-
-        context = self._build_context(relevant_chunks, cleaned_text)
         generation_start = time.perf_counter()
-        summary = self.model.summarize_with_options(
-            context,
-            summary_length=summary_length,
-            output_format=output_format,
-        )
+        warnings = list(rag_result.warnings)
+        if rag_result.context:
+            context_tokens = self.model.count_tokens(rag_result.context)
+            if context_tokens > self.model.config.max_input_tokens:
+                warnings.append(
+                    f"RAG context {context_tokens} tokens > "
+                    f"{self.model.config.max_input_tokens}, may be truncated"
+                )
+            if context_tokens > self.model.config.max_input_tokens:
+                summary = self._summarize_long_context(rag_result.context)
+                result_warnings = []
+            else:
+                result = self.model.summarize(rag_result.context, max_new_tokens=256)
+                summary = result.output_text
+                result_warnings = result.warnings
+            warnings.extend(result_warnings)
+        else:
+            summary = ""
+        if summary and rag_result.context:
+            summary, negation_warnings = self._apply_negation_guard(rag_result.context, summary)
+            warnings.extend(negation_warnings)
+            summary = self._filter_hallucinations(rag_result.context, summary)
+        summary = self.model._trim_incomplete_sentence(summary)
         generation_latency = time.perf_counter() - generation_start
         rag_latency = time.perf_counter() - rag_start
-
-        diagnostics = {
+        return {
             "summary": summary,
-            "chunk_count": len(chunks),
-            "retrieved_chunk_count": len(relevant_chunks),
-            "context_char_length": len(context),
+            "warnings": warnings,
+            "rag_latency": rag_latency,
             "retrieval_latency": retrieval_latency,
             "generation_latency": generation_latency,
-            "rag_latency": rag_latency,
+            "chunk_count": None,
+            "retrieved_chunk_count": len(rag_result.retrieved_chunks),
+            "context_char_length": len(rag_result.context),
+            "model_name": getattr(self.model, "MODEL_NAME", None),
+            "embedding_model_name": getattr(self.embed_model, "model_name", getattr(self.embed_model, "MODEL_NAME", None)),
+            "model_device": getattr(self.model, "device", None),
+            "generation_backend": "vit5",
+            "embedding_backend": "phobert",
+            "used_model_fallback": False,
+            "model_load_error": None,
+            "embedding_load_error": None,
             "rag_top_k": self.top_k,
             "chunk_size": self.chunk_size,
             "chunk_overlap": self.chunk_overlap,
+            "cuda_available": torch.cuda.is_available(),
+            "gpu_memory_mb": round(torch.cuda.get_device_properties(0).total_memory / (1024 * 1024), 2) if torch.cuda.is_available() else None,
         }
-        diagnostics.update(self.model.diagnostics())
-        diagnostics.update(self.embedding_model.diagnostics())
-        return diagnostics
+
+    def _extract_negation_sentences(self, text: str) -> list[str]:
+        raw = re.split(r'(?<=[.!?])\s+|\n+', text)
+        neg_sents = []
+        for s in raw:
+            s = s.strip()
+            if not s:
+                continue
+            if not re.match(r'^(không|tránh|đừng|ngừng|cấm|chớ)\b', s, re.IGNORECASE):
+                continue
+            if len(s.split()) > 25:
+                continue
+            neg_sents.append(s.rstrip('.!?'))
+        return neg_sents
+
+    def _word_overlap_score(self, sent: str, summary: str) -> float:
+        words_s = set(re.findall(r'\w+', sent.lower()))
+        words_sum = set(re.findall(r'\w+', summary.lower()))
+        if not words_s:
+            return 1.0
+        return len(words_s & words_sum) / len(words_s)
+
+    def _apply_negation_guard(self, source_text: str, summary: str) -> tuple[str, list[str]]:
+        warnings = []
+        neg_sents = self._extract_negation_sentences(source_text)
+        if not neg_sents:
+            return summary, warnings
+        summary_lower = summary.lower()
+        missing = []
+        for sent in neg_sents:
+            if sent.lower() in summary_lower:
+                continue
+            keyword_match = NEGATION_PATTERN.search(sent)
+            if keyword_match and keyword_match.group().lower() in summary_lower:
+                continue
+            if self._word_overlap_score(sent, summary) > 0.7:
+                continue
+            missing.append(sent)
+        if missing:
+            to_add = missing[:5]
+            additions = [s if s.endswith(('.', '!', '?')) else s + '.' for s in to_add]
+            summary = summary.rstrip() + ' ' + ' '.join(additions)
+            warnings.append(f"[RAG] Đã thêm {len(to_add)} câu phủ định còn thiếu: {to_add}")
+        return summary, warnings
+
+    VIET_STOPWORDS = {
+        "và", "của", "có", "là", "được", "cho", "với", "một", "những", "này",
+        "không", "nhưng", "tuy", "nhiên", "đó", "này", "kia", "ấy", "đây",
+        "mọi", "tất cả", "các", "đều", "chỉ", "sự", "việc", "thì", "mà",
+        "hay", "hoặc", "nếu", "bởi", "vì", "để", "đến", "từ", "ra", "vào",
+        "lên", "xuống", "lại", "qua", "về", "trước", "sau", "trong", "ngoài",
+        "trên", "dưới", "giữa", "cùng", "hơn", "nữa", "cũng", "còn", "đang",
+        "sẽ", "đã", "mới", "vừa", "rất", "quá", "lắm", "nhiều", "ít",
+        "người", "ta", "tôi", "bạn", "anh", "chị", "em", "chúng", "họ",
+        "nó", "chàng", "nàng",
+    }
+
+    def _get_token_overlap(self, sentence: str, source: str) -> float:
+        tokens_s = [t for t in re.findall(r'\w+', sentence.lower()) if t not in self.VIET_STOPWORDS]
+        tokens_src = set(t for t in re.findall(r'\w+', source.lower()) if t not in self.VIET_STOPWORDS)
+        if not tokens_s:
+            return 0.0
+        common = [t for t in tokens_s if t in tokens_src]
+        return len(common) / len(tokens_s)
+
+    def _filter_hallucinations(self, source: str, summary: str) -> str:
+        sents = re.split(r'(?<=[.!?])\s+', summary)
+        filtered = []
+        for s in sents:
+            s = s.strip()
+            if not s:
+                continue
+            if s.endswith('?') and not NEGATION_PATTERN.search(s):
+                continue
+            if re.search(r'\b(có phải|liệu có phải|hay không|đúng không|phải không)\b', s, re.IGNORECASE):
+                continue
+            if NEGATION_PATTERN.search(s):
+                filtered.append(s)
+                continue
+            overlap = self._get_token_overlap(s, source)
+            if overlap >= 0.3:
+                filtered.append(s)
+            else:
+                logger.debug("Loại bỏ câu nghi ngờ ảo giác: %s", s[:100])
+        return ' '.join(filtered) if filtered else summary
+
+    def _summarize_long_context(self, context: str) -> str:
+        if self.model is None:
+            raise ValueError("_summarize_long_context requires a ViT5Model")
+        words = context.split()
+        window = 700
+        stride = 650
+        parts = []
+        for i in range(0, len(words), stride):
+            part = " ".join(words[i:i+window]).strip()
+            if not part:
+                continue
+            parts.append(self.model.summarize(part, max_new_tokens=256).output_text)
+            if i + window >= len(words):
+                break
+        merged = "\n".join(parts)
+        return self.model.summarize(merged, max_new_tokens=256).output_text
+
+    def _build_context(self, chunks: list[RetrievedChunk]) -> tuple[str, list[str]]:
+        warnings = []
+        if self.model is None:
+            parts = [f"[{i + 1}] {chunk.chunk}" for i, chunk in enumerate(chunks)]
+            return "\n\n".join(parts), warnings
+        parts = []
+        for i, chunk in enumerate(chunks):
+            candidate = parts + [f"[{i + 1}] {chunk.chunk}"]
+            candidate_text = "\n\n".join(candidate)
+            if self.model.count_tokens(candidate_text) > self.model.config.max_input_tokens:
+                warnings.append(f"Context capped at {i} chunks to fit token budget")
+                break
+            parts = candidate
+        return "\n\n".join(parts), warnings
