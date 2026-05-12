@@ -1,3 +1,4 @@
+from _typeshed import wsgi
 import time
 from dataclasses import dataclass, field
 import torch

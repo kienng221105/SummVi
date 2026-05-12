@@ -106,21 +106,7 @@ class ViT5Model:
         text = text.strip()
         text = self._remove_repeated_sentences(text)
         text = self._trim_incomplete_sentence(text)
-        text = self._normalize_vietnamese_text(text)
         return text
-
-    def _normalize_vietnamese_text(self, text: str) -> str:
-        # Sửa lỗi gõ và ghép từ phổ biến của ViT5
-        replacements = {
-            r"\b(C|c)vì\b": r"\1vì",
-            r"nilông": "ni-lông",
-            r"k ho": "kho",
-            r"\s+([,.!?])": r"\1",
-            r"([,.!?])([A-Za-zÀ-Ỹà-ỹ])": r"\1 \2",
-        }
-        for pattern, replacement in replacements.items():
-            text = re.sub(pattern, replacement, text)
-        return text.strip()
 
     def _split_sentences(self, text: str) -> list[str]:
         protected = {

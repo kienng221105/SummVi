@@ -1,0 +1,9 @@
+{
+  "model_version": "vit5-retrain-20260407172644",
+  "created_at": "2026-04-07T17:26:44.686414",
+  "training_rows": 3,
+  "feature_rows": 3,
+  "log_rows": 5,
+  "average_compression_ratio": -0.6235566853537227,
+  "average_latency": 18.305313119999845
+}
