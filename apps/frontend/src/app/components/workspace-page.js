@@ -67,7 +67,8 @@ function splitSummary(summary) {
 }
 
 function countWords(text) {
-  return text.trim().split(/\s+/).filter(Boolean).length;
+  if (!text) return 0;
+  return text.match(/[\p{L}\p{N}]+/gu)?.length || 0;
 }
 
 export default function WorkspacePage() {
