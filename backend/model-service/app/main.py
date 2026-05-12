@@ -9,7 +9,7 @@ from app.services.inference_service import get_inference_service
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    get_inference_service()  # warm-up: pre-load models at startup
+    get_inference_service() 
     yield
 
 
