@@ -18,7 +18,7 @@ import { clearStoredSession } from "../lib/session";
 import { useSessionGuard } from "../lib/session-guard";
 
 const QUICK_START_TEXT =
-  "Nhập một đoạn văn tiếng Việt để tạo tóm tắt.";
+  "Nhập một đoạn báo tiếng Việt để tạo tóm tắt.";
 
 const LENGTH_OPTIONS = [
   { label: "Ngắn", value: "short" },
@@ -674,11 +674,10 @@ export default function WorkspacePage() {
               <>
                 <div className="workspace-header">
                   <h1>
-                    Sức mạnh AI, <span className="text-gradient">tóm gọn</span> mọi văn bản.
+                    Hệ thống tóm tắt SummVi, <span className="text-gradient">tóm tắt</span> báo tiếng Việt.
                   </h1>
                   <p>
-                    Nhập văn bản, đường dẫn hoặc mở bảng tài liệu để thực hiện tóm tắt. Hệ thống đang
-                    sẵn sàng xử lý và cung cấp thông tin hữu ích cho bạn.
+                    Nhập văn bản hoặc tải file báo để thực hiện tóm tắt. Hệ thống sẽ xử lý và cung cấp thông tin hữu ích cho bạn.
                   </p>
                 </div>
 
@@ -735,7 +734,7 @@ export default function WorkspacePage() {
                     )
                   ) : (
                     <div className="empty-preview">
-                      <p>Nhập văn bản bên dưới để bắt đầu tóm tắt bằng AI.</p>
+                      <p>Nhập văn bản bên dưới để bắt đầu tóm tắt.</p>
                     </div>
                   )}
                 </div>

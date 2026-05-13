@@ -11,7 +11,7 @@ export default function RegisterPage() {
     <AuthPage
       mode="register"
       title="Tạo tài khoản mới"
-      subtitle="Đăng ký để lưu lịch sử tóm tắt, đánh giá kết quả và sử dụng các tính năng quản trị."
+      subtitle="Đăng ký để trải nghiệm dịch vụ tóm tắt báo tiếng Việt"
     />
   );
 }

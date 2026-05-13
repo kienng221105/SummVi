@@ -249,8 +249,7 @@ export default function AuthPage({ mode, title, subtitle }) {
                 <label className="remember-me">
                   <input type="checkbox" />
                   <span>Ghi nhớ tôi</span>
-                </label>
-                <span className="forgot-pw">Bảo mật hệ thống</span>
+                  </label>
               </div>
             ) : (
               <div className="form-options">

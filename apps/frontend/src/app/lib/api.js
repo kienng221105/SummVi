@@ -113,7 +113,7 @@ async function request(path, options = {}) {
         await new Promise((r) => setTimeout(r, attempt * 1000));
         continue;
       }
-      throw new Error("Backend chưa sẵn sàng hoặc không thể kết nối. Hãy khởi động backend trước.");
+      throw new Error("Hệ thống chưa sẵn sàng, vui lòng thử lại sau ít phút");
     }
   }
 }

@@ -2,7 +2,7 @@ import "./globals.css";
 
 export const metadata = {
   title: "SummVi",
-  description: "Nền tảng tóm tắt tiếng Việt với RAG, đánh giá và giám sát BI."
+  description: "Nền tảng tóm tắt báo tiếng Việt."
 };
 
 export default function RootLayout({ children }) {
