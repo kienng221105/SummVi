@@ -134,7 +134,6 @@ class ViT5Model:
         return text
 
     def _normalize_vietnamese_text(self, text: str) -> str:
-        # Sửa lỗi gõ và ghép từ phổ biến của ViT5
         replacements = {
             r"\b(C|c)vì\b": r"\1vì",
             r"nilông": "ni-lông",

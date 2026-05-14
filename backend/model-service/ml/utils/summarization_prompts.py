@@ -1,7 +1,4 @@
 LENGTH_POLICY = {
-    # max_new_tokens is a ceiling, not a target. These caps are intentionally
-    # lower for short/medium so the model is forced to produce visibly different
-    # lengths. Long keeps the old safe 512-token behavior.
     "short": {"ratio": 0.08, "min": 64, "max": 80, "min_new": 16, "length_penalty": 0.6},
     "medium": {"ratio": 0.22, "min": 192, "max": 256, "min_new": 120, "length_penalty": 1.1},
     "long": {"ratio": 0.40, "min": 384, "max": 512, "min_new": 160, "length_penalty": 1.2},
@@ -22,7 +19,6 @@ LENGTH_INSTRUCTION_MAP = {
     "medium": "Tóm tắt vừa phải, giữ đầy đủ các ý quan trọng.",
     "long": "Tóm tắt chi tiết, giữ tối đa thông tin quan trọng nhưng tránh lan man.",
 }
-
 
 def generation_policy_for_length(
     input_tokens: int,
@@ -46,7 +42,6 @@ def generation_policy_for_length(
         "length_penalty": float(policy["length_penalty"]),
     }
 
-
 def max_new_tokens_for_length(
     input_tokens: int,
     summary_length: str = "medium",
@@ -60,16 +55,11 @@ def max_new_tokens_for_length(
         )["max_new_tokens"]
     )
 
-
 def summarize_prompt(
     text: str,
     style: str = "paragraph",
     summary_length: str = "medium",
 ) -> str:
-    # Keep the model input identical to the old working setup.
-    # The currently loaded ViT5 summarization model hallucinates when we prepend
-    # instruction text such as "Tóm tắt:" or style prefixes. Length is controlled
-    # by max_new_tokens, and bullet formatting is handled after generation.
     return text
 
 def qa_prompt(context: str, question: str) -> str:
