@@ -46,14 +46,31 @@ class ViT5Model:
         self.model.eval()
         self.model.to(self.device)
 
-    def summarize(self, text: str, max_new_tokens: int | None = None) -> ViT5Output:
+    def summarize(
+        self,
+        text: str,
+        max_new_tokens: int | None = None,
+        min_new_tokens: int | None = None,
+        length_penalty: float | None = None,
+    ) -> ViT5Output:
         text = self._fix_broken_words(text)
-        return self._generate(text, max_new_tokens=max_new_tokens)
+        return self._generate(
+            text,
+            max_new_tokens=max_new_tokens,
+            min_new_tokens=min_new_tokens,
+            length_penalty=length_penalty,
+        )
 
     def count_tokens(self, text: str) -> int:
         return len(self.tokenizer.encode(text, add_special_tokens=False))
 
-    def _generate(self, prompt: str, max_new_tokens: int | None = None) -> ViT5Output:
+    def _generate(
+        self,
+        prompt: str,
+        max_new_tokens: int | None = None,
+        min_new_tokens: int | None = None,
+        length_penalty: float | None = None,
+    ) -> ViT5Output:
         warnings = []
         encoded = self.tokenizer(
             prompt,
@@ -64,6 +81,8 @@ class ViT5Model:
         input_token_count = encoded["input_ids"].shape[1]
         was_truncated = False
         effective_max = max_new_tokens or self.config.max_output_tokens
+        effective_min = min_new_tokens
+        effective_length_penalty = length_penalty or self.config.length_penalty
         if input_token_count > self.config.max_input_tokens:
             if self.config.truncation_behavior == TruncationBehavior.RAISE:
                 raise ViT5TruncationError(
@@ -81,15 +100,20 @@ class ViT5Model:
                 padding=False,
             )
         encoded = {k: v.to(self.device) for k, v in encoded.items()}
+        generation_kwargs = {
+            "max_new_tokens": effective_max,
+            "num_beams": self.config.num_beams,
+            "length_penalty": effective_length_penalty,
+            "no_repeat_ngram_size": self.config.no_repeat_ngram_size,
+            "repetition_penalty": self.config.repetition_penalty,
+            "early_stopping": self.config.early_stopping,
+        }
+        if effective_min is not None:
+            generation_kwargs["min_new_tokens"] = effective_min
         with torch.no_grad():
             output_ids = self.model.generate(
                 **encoded,
-                max_new_tokens=effective_max,
-                num_beams=self.config.num_beams,
-                length_penalty=self.config.length_penalty,
-                no_repeat_ngram_size=self.config.no_repeat_ngram_size,
-                repetition_penalty=self.config.repetition_penalty,
-                early_stopping=self.config.early_stopping,
+                **generation_kwargs,
             )
         output_token_count = output_ids.shape[1]
         output_text = str(self.tokenizer.decode(output_ids[0], skip_special_tokens=True))
