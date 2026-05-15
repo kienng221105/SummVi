@@ -19,7 +19,7 @@ class Settings:
     app_version: str = "2.0.0"
     api_prefix: str = "/api/v1"
     cors_origins: tuple[str, ...] = tuple(os.getenv("CORS_ORIGINS", "*").split(","))
-    lite_mode: bool = os.getenv("LITE_MODE", "false").lower() in {"1", "true", "yes", "on"}
+
     secret_key: str = os.getenv("SECRET_KEY", "")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
     default_admin_email: str = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@summvi.local")
@@ -29,8 +29,8 @@ class Settings:
     postgres_db: str = os.getenv("POSTGRES_DB", "summarization")
     postgres_user: str = os.getenv("POSTGRES_USER", "postgres")
     postgres_password: str = os.getenv("POSTGRES_PASSWORD", "postgres")
-    model_service_url: str = os.getenv("MODEL_SERVICE_URL", "http://model-service:8001")
-    model_service_timeout_seconds: float = float(os.getenv("MODEL_SERVICE_TIMEOUT_SECONDS", "120"))
+    model_service_url: str = os.getenv("MODEL_SERVICE_URL", "https://hagurou-summ-vi.hf.space")
+    model_service_timeout_seconds: float = float(os.getenv("MODEL_SERVICE_TIMEOUT_SECONDS", "180"))
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     data_raw_dir: str = os.getenv("DATA_RAW_DIR", str(ROOT_DIR / "data" / "raw"))
     data_processed_dir: str = os.getenv("DATA_PROCESSED_DIR", str(ROOT_DIR / "data" / "processed"))

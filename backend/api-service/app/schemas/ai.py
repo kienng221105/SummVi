@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -50,3 +50,17 @@ class SummarizeResponse(BaseModel):
     summary: str
     metrics: Dict[str, float]
     created_at: datetime
+
+
+class MultiSummarizeRequest(BaseModel):
+    texts: List[str] = Field(..., min_length=1, description="List of Vietnamese texts to summarize")
+    summary_length: str = Field(default="medium", pattern="^(short|medium|long)$")
+    output_format: str = Field(default="paragraph", pattern="^(paragraph|bullet|keypoints)$")
+    conversation_title: str | None = None
+    conversation_id: UUID | None = None
+
+
+class FileSummarizeResponse(BaseModel):
+    summary: str
+    extracted_text_preview: Optional[str] = None
+    diagnostics: Dict[str, Any] = Field(default_factory=dict)

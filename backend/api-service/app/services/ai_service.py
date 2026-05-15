@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.user_activity import UserActivity
-from app.schemas.ai import SummarizeRequest, SummarizeResponse
+from app.schemas.ai import MultiSummarizeRequest, SummarizeRequest, SummarizeResponse
 from app.services import analytics_service
 from app.services.inference_log_service import create_inference_log
 from app.services.model_client import ModelServiceError, model_client
@@ -164,6 +164,95 @@ def summarize_text(db: Session, user_id: UUID, request: SummarizeRequest) -> Sum
             user_id=user_id,
             action="summarize_text",
             details=f"conversation_id={conversation.id};length={len(request.text)}",
+        )
+    )
+    db.commit()
+
+    return SummarizeResponse(
+        id=assistant_message.id,
+        conversation_id=conversation.id,
+        content=assistant_message.content,
+        summary=summary,
+        metrics=metrics,
+        created_at=assistant_message.created_at,
+    )
+
+
+def multi_summarize_text(db: Session, user_id: UUID, request: MultiSummarizeRequest) -> SummarizeResponse:
+    """
+    Multi-document summarization với conversation tracking.
+
+    Flow tương tự summarize_text nhưng gọi multi-summarize endpoint
+    của model service để tóm tắt nhiều đoạn văn bản cùng lúc.
+    """
+    combined_text = "\n\n---\n\n".join(request.texts)
+
+    if request.conversation_id:
+        conversation = (
+            db.query(Conversation)
+            .filter(Conversation.id == request.conversation_id, Conversation.user_id == user_id)
+            .first()
+        )
+        if conversation is None:
+            conversation = create_conversation(
+                db,
+                user_id=user_id,
+                title=request.conversation_title or "Tóm tắt đa văn bản",
+            )
+    else:
+        conversation = create_conversation(
+            db,
+            user_id=user_id,
+            title=request.conversation_title or "Tóm tắt đa văn bản",
+        )
+        cleanup_old_conversations(db, user_id, limit=10)
+
+    create_message(db, conversation.id, combined_text, is_user=True)
+
+    started_at = perf_counter()
+    try:
+        result = model_client.multi_summarize(
+            request.texts,
+            summary_length=request.summary_length,
+            output_format=request.output_format,
+        )
+    except ModelServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Model service is unavailable",
+        ) from exc
+
+    summary = str(result.get("summary") or "")
+    metrics = result.get("metrics") or {}
+    diagnostics = result.get("diagnostics") or {}
+    latency = float(diagnostics.get("latency") or (perf_counter() - started_at))
+
+    assistant_message = create_message(db, conversation.id, summary, is_user=False)
+
+    create_inference_log(
+        db,
+        input_length=len(combined_text),
+        summary_length=len(summary),
+        input_word_count=int(metrics.get("input_word_count", 0)),
+        summary_word_count=int(metrics.get("summary_word_count", 0)),
+        length_ratio=float(metrics.get("length_ratio", 0.0)),
+        compression_ratio=float(metrics.get("compression_ratio", 0.0)),
+        latency=latency,
+        diagnostics=diagnostics,
+    )
+
+    import threading
+    threading.Thread(
+        target=analytics_service.record_analytics,
+        kwargs={"summary": summary, "input_text": combined_text},
+        daemon=True,
+    ).start()
+
+    db.add(
+        UserActivity(
+            user_id=user_id,
+            action="multi_summarize_text",
+            details=f"conversation_id={conversation.id};doc_count={len(request.texts)};length={len(combined_text)}",
         )
     )
     db.commit()
