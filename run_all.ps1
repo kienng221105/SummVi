@@ -3,20 +3,35 @@
 
 if (-not (Test-Path ".env")) { Copy-Item ".env.example" ".env" }
 
+$modelEndpoint = "https://kiencnt2205-summ-vi-v2.hf.space"
 $choice = Read-Host "Run SummVi? (1: Local, 2: Docker)"
+
+$env:MODEL_SERVICE_URL = $modelEndpoint
 
 if ($choice -eq "2") {
     Write-Host ""
-    Write-Host "  === SummVi - Starting All Services ===" -ForegroundColor Cyan
+    Write-Host "  === SummVi - Starting Core Services ===" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  Services:" -ForegroundColor Yellow
     Write-Host "    PostgreSQL      localhost:5432"
-    Write-Host "    Model Service   http://localhost:8001"
+    Write-Host "    Model Endpoint  $modelEndpoint"
     Write-Host "    Backend API     http://localhost:8000"
     Write-Host "    Frontend        http://localhost:3000"
     Write-Host "    Swagger Docs    http://localhost:8000/docs"
     Write-Host ""
-    docker compose up --build
+    docker compose up -d db
+    $dbContainerId = $null
+    for ($i = 0; $i -lt 30; $i++) {
+        $dbContainerId = docker compose ps -q db
+        if ($dbContainerId) {
+            $dbHealth = docker inspect -f "{{.State.Health.Status}}" $dbContainerId 2>$null
+            if ($dbHealth -eq "healthy") {
+                break
+            }
+        }
+        Start-Sleep -Seconds 2
+    }
+    docker compose up --build -d --no-deps api-service frontend
     exit
 }
 
@@ -40,6 +55,8 @@ Get-Content ".env" | ForEach-Object {
     }
 }
 
+$env:MODEL_SERVICE_URL = $modelEndpoint
+
 # Auto-install api-service deps
 $apiReqFile = "backend\api-service\requirements.txt"
 $apiStampFile = "backend\api-service\.deps_installed"
@@ -55,21 +72,6 @@ if (Test-Path $apiReqFile) {
     }
 }
 
-# Auto-install model-service deps
-$modelReqFile = "backend\model-service\requirements.txt"
-$modelStampFile = "backend\model-service\.deps_installed"
-if (Test-Path $modelReqFile) {
-    $modelReqHash = (Get-FileHash $modelReqFile -Algorithm MD5).Hash
-    if (-not (Test-Path $modelStampFile) -or (Get-Content $modelStampFile -ErrorAction SilentlyContinue) -ne $modelReqHash) {
-        Write-Host "Installing model-service dependencies..." -ForegroundColor Yellow
-        python -m pip install -r $modelReqFile --quiet 2>&1 | Out-Null
-        $modelReqHash | Out-File $modelStampFile -NoNewline
-        Write-Host "  Done" -ForegroundColor Green
-    } else {
-        Write-Host "Model service deps up-to-date (skipped)" -ForegroundColor Green
-    }
-}
-
 # Auto-install frontend deps
 if (-not (Test-Path "apps\frontend\node_modules")) {
     Write-Host "Installing frontend dependencies..." -ForegroundColor Yellow
@@ -79,19 +81,17 @@ if (-not (Test-Path "apps\frontend\node_modules")) {
     Write-Host "Frontend deps up-to-date (skipped)" -ForegroundColor Green
 }
 
-# Start all services
-$modelCmd = "`$env:PYTHONPATH='$ROOT'; Set-Location '$ROOT\backend\model-service'; python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"
+# Start core services
 $apiCmd = "`$env:PYTHONPATH='$ROOT'; Set-Location '$ROOT\backend\api-service'; python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 $frontCmd = "Set-Location '$ROOT\apps\frontend'; npm run dev"
 
-Start-Process powershell -ArgumentList "-NoExit", "-Command", $modelCmd
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $apiCmd
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontCmd
 
 Write-Host ""
-Write-Host "  === SummVi - All Services Started ===" -ForegroundColor Cyan
+Write-Host "  === SummVi - Core Services Started ===" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Model Service  http://localhost:8001" -ForegroundColor Green
+Write-Host "  Model Endpoint $modelEndpoint" -ForegroundColor Green
 Write-Host "  Backend API    http://localhost:8000" -ForegroundColor Green
 Write-Host "  Frontend       http://localhost:3000" -ForegroundColor Green
 Write-Host "  Swagger Docs   http://localhost:8000/docs" -ForegroundColor Green

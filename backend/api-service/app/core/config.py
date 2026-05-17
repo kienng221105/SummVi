@@ -29,7 +29,7 @@ class Settings:
     postgres_db: str = os.getenv("POSTGRES_DB", "summarization")
     postgres_user: str = os.getenv("POSTGRES_USER", "postgres")
     postgres_password: str = os.getenv("POSTGRES_PASSWORD", "postgres")
-    model_service_url: str = os.getenv("MODEL_SERVICE_URL", "https://hagurou-summ-vi.hf.space")
+    model_service_url: str = os.getenv("MODEL_SERVICE_URL", "https://kiencnt2205-summ-vi-v2.hf.space")
     model_service_timeout_seconds: float = float(os.getenv("MODEL_SERVICE_TIMEOUT_SECONDS", "180"))
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     data_raw_dir: str = os.getenv("DATA_RAW_DIR", str(ROOT_DIR / "data" / "raw"))

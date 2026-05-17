@@ -75,7 +75,7 @@ services:
       - GSHEET_CREDENTIALS_FILE=/app/credentials/service_account.json
       - GSHEET_SPREADSHEET_ID=${GSHEET_SPREADSHEET_ID}
       - GSHEET_WORKSHEET_NAME=${GSHEET_WORKSHEET_NAME}
-      - MODEL_SERVICE_URL=${MODEL_SERVICE_URL:-http://model-service:8001}
+      - MODEL_SERVICE_URL=${MODEL_SERVICE_URL:-https://kiencnt2205-summ-vi-v2.hf.space}
       - MODEL_SERVICE_TIMEOUT_SECONDS=${MODEL_SERVICE_TIMEOUT_SECONDS:-120}
     volumes:
       - ./warehouse:/app/warehouse
