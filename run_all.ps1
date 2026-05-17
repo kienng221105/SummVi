@@ -19,19 +19,7 @@ if ($choice -eq "2") {
     Write-Host "    Frontend        http://localhost:3000"
     Write-Host "    Swagger Docs    http://localhost:8000/docs"
     Write-Host ""
-    docker compose up -d db
-    $dbContainerId = $null
-    for ($i = 0; $i -lt 30; $i++) {
-        $dbContainerId = docker compose ps -q db
-        if ($dbContainerId) {
-            $dbHealth = docker inspect -f "{{.State.Health.Status}}" $dbContainerId 2>$null
-            if ($dbHealth -eq "healthy") {
-                break
-            }
-        }
-        Start-Sleep -Seconds 2
-    }
-    docker compose up --build -d --no-deps api-service frontend
+    docker compose up --build -d
     exit
 }
 
